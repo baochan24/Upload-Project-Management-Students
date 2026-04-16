@@ -1,0 +1,11 @@
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.csproj.AssemblyReference.cache
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.GeneratedMSBuildEditorConfig.editorconfig
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.csproj.CoreCompileInputs.cache
+D:\doAnHQTCSDL\UI\bin\Debug\net48\QuanLySinhVienWinForms.exe.config
+D:\doAnHQTCSDL\UI\bin\Debug\net48\QuanLySinhVienWinForms.exe
+D:\doAnHQTCSDL\UI\bin\Debug\net48\QuanLySinhVienWinForms.pdb
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.exe
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.pdb
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.AssemblyInfoInputs.cache
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.AssemblyInfo.cs
+D:\doAnHQTCSDL\UI\bin\Debug\net48\App.config

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start \"\" \"D:\\\\\\\\doAnHQTCSDL\\\\\\\\UI\\\\\\\\bin\\\\\\\\Debug\\\\\\\\net48\\\\\\\\QuanLySinhVienWinForms.exe\"2)",
+      "Bash(start:*)",
+      "Bash(dotnet build:*)",
+      "Bash(cmd:*)"
+    ]
+  }
+}
