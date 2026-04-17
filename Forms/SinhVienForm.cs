@@ -17,6 +17,8 @@ namespace QuanLySinhVien.Forms
         private readonly ComboBox cmbMaLopSH;
         private readonly ComboBox cmbTinhTrang;
         private readonly TextBox txtSearch;
+        private readonly Button btnXemChiTiet;
+        private readonly Button btnChuyenLop;
 
         public SinhVienForm()
         {
@@ -86,7 +88,24 @@ namespace QuanLySinhVien.Forms
             var btnRefresh = new Button { Text = "Làm mới", Top = 270, Left = 500, Width = 100 };
             btnRefresh.Click += (sender, args) => LoadData();
 
-            panel.Controls.AddRange(new Control[] { btnSearch, btnAdd, btnUpdate, btnDelete, btnRefresh });
+            // ── Cột nút thứ hai (Left=620) ──────────────────────────────
+            btnXemChiTiet = new Button
+            {
+                Text = "Xem chi tiết",
+                Top = 120, Left = 620, Width = 120, Height = 26,
+                BackColor = System.Drawing.Color.FromArgb(173, 216, 230)
+            };
+            btnXemChiTiet.Click += BtnXemChiTiet_Click;
+
+            btnChuyenLop = new Button
+            {
+                Text = "Chuyển lớp",
+                Top = 170, Left = 620, Width = 120, Height = 26,
+                BackColor = System.Drawing.Color.FromArgb(255, 228, 181)
+            };
+            btnChuyenLop.Click += BtnChuyenLop_Click;
+
+            panel.Controls.AddRange(new Control[] { btnSearch, btnAdd, btnUpdate, btnDelete, btnRefresh, btnXemChiTiet, btnChuyenLop });
             Controls.Add(panel);
             Controls.Add(dgvSinhVien);
 
@@ -162,12 +181,70 @@ namespace QuanLySinhVien.Forms
 
         private void BtnDelete_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show("Bạn có chắc muốn xóa sinh viên này?", "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            var maSV = txtMaSV.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(maSV))
+            {
+                MessageBox.Show("Vui lòng chọn sinh viên cần chuyển trạng thái.", "Thiếu thông tin",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (MessageBox.Show(
+                    $"Chuyển sinh viên [{maSV}] sang trạng thái \"Thôi học\"?\n\n" +
+                    "Thao tác này không xóa dữ liệu khỏi hệ thống.",
+                    "Xác nhận",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
 
-            var result = SinhVienBUS.Delete(txtMaSV.Text);
-            MessageBox.Show(result.Message, result.Success ? "Thành công" : "Lỗi", MessageBoxButtons.OK, result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            var result = SinhVienBUS.CapNhatTinhTrang(maSV, "Thôi học");
+            MessageBox.Show(result.Message,
+                result.Success ? "Thành công" : "Lỗi",
+                MessageBoxButtons.OK,
+                result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             if (result.Success) LoadData();
+        }
+
+        // ── Xem chi tiết hồ sơ ───────────────────────────────────────────
+        private void BtnXemChiTiet_Click(object sender, EventArgs e)
+        {
+            var maSV = txtMaSV.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(maSV))
+            {
+                MessageBox.Show("Vui lòng chọn hoặc nhập mã sinh viên.", "Thiếu thông tin",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try
+            {
+                var form = new ChiTietSinhVienForm(maSV);
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ── Chuyển lớp ───────────────────────────────────────────────────
+        private void BtnChuyenLop_Click(object sender, EventArgs e)
+        {
+            var maSV = txtMaSV.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(maSV))
+            {
+                MessageBox.Show("Vui lòng chọn hoặc nhập mã sinh viên.", "Thiếu thông tin",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try
+            {
+                var form = new ChuyenLopDialog(maSV);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                    LoadData();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }

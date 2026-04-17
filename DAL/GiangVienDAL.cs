@@ -63,7 +63,7 @@ namespace QuanLySinhVien.DAL
                 new SqlParameter("@MaGV", SqlDbType.VarChar, 10) { Value = maGV },
                 rp
             });
-            return CreateResult(rp);
+            return CreateDeleteResult(rp);
         }
 
         private static OperationResult CreateResult(SqlParameter rp)
@@ -73,9 +73,21 @@ namespace QuanLySinhVien.DAL
             {
                 1  => OperationResult.Ok(),
                 -1 => OperationResult.Fail("Mã giảng viên đã tồn tại hoặc không tồn tại."),
-                -2 => OperationResult.Fail("Vui lòng nhập đầy đủ thông tin."),
+                -2 => OperationResult.Fail("Vui lòng nhập đầy đủ thông tin bắt buộc."),
                 -3 => OperationResult.Fail("Khoa không tồn tại."),
                 -4 => OperationResult.Fail("Email đã được sử dụng bởi giảng viên khác."),
+                _  => OperationResult.Fail("Thao tác thất bại.")
+            };
+        }
+
+        private static OperationResult CreateDeleteResult(SqlParameter rp)
+        {
+            var code = rp.Value == DBNull.Value ? 0 : (int)rp.Value;
+            return code switch
+            {
+                1  => OperationResult.Ok(),
+                -1 => OperationResult.Fail("Không tìm thấy giảng viên này."),
+                -2 => OperationResult.Fail("Không thể xóa: giảng viên đang phụ trách lớp học phần."),
                 _  => OperationResult.Fail("Thao tác thất bại.")
             };
         }

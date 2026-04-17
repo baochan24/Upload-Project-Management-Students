@@ -54,7 +54,8 @@ namespace QuanLySinhVien.Forms
             // ── Báo cáo ──
             var bcMenu      = new ToolStripMenuItem("Báo cáo");
             var bcItem      = new ToolStripMenuItem("Báo cáo & Thống kê", null, (s, e) => OpenChildForm(new BaoCaoForm()));
-            bcMenu.DropDownItems.Add(bcItem);
+            var bdItem      = new ToolStripMenuItem("Bảng điểm cá nhân",  null, (s, e) => OpenChildForm(new BangDiemCaNhanForm()));
+            bcMenu.DropDownItems.AddRange(new ToolStripItem[] { bcItem, new ToolStripSeparator(), bdItem });
 
             // ── Quản trị ──
             var adminMenu   = new ToolStripMenuItem("Quản trị");

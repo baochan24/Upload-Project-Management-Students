@@ -33,6 +33,15 @@ namespace QuanLySinhVien.DAL
             );
         }
 
+        // ── BC04: Bảng điểm cá nhân ──────────────────────────────────────
+        public static DataTable LayDiemSinhVien(string maSV, string maHocKy = null)
+        {
+            return DatabaseHelper.ExecuteDataTable("sp_LayDiemSinhVien",
+                new SqlParameter("@MaSV",    SqlDbType.VarChar, 10) { Value = maSV },
+                new SqlParameter("@MaHocKy", SqlDbType.VarChar, 10) { Value = (object)maHocKy ?? DBNull.Value }
+            );
+        }
+
         private static DataTable[] ExecuteMultipleResultSets(string sp, int count, params SqlParameter[] parameters)
         {
             var results = new DataTable[count];

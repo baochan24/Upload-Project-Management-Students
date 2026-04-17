@@ -38,5 +38,38 @@ namespace QuanLySinhVien.BUS
 
             return SinhVienDAL.Delete(maSV.Trim().ToUpperInvariant());
         }
+
+        // ── SV03: Soft delete – đổi TinhTrang ────────────────────────────
+        public static OperationResult CapNhatTinhTrang(string maSV, string tinhTrangMoi)
+        {
+            if (string.IsNullOrWhiteSpace(maSV))
+                return OperationResult.Fail("Mã sinh viên là bắt buộc.");
+            if (string.IsNullOrWhiteSpace(tinhTrangMoi))
+                return OperationResult.Fail("Tình trạng mới là bắt buộc.");
+            return SinhVienDAL.CapNhatTinhTrang(maSV.Trim().ToUpperInvariant(), tinhTrangMoi.Trim());
+        }
+
+        // ── SV06: Xem chi tiết hồ sơ (2 result sets) ─────────────────────
+        public static DataTable[] LayChiTiet(string maSV)
+        {
+            if (string.IsNullOrWhiteSpace(maSV))
+                throw new ArgumentException("Mã sinh viên là bắt buộc.");
+            return SinhVienDAL.LayChiTiet(maSV.Trim().ToUpperInvariant());
+        }
+
+        // ── SV07: Chuyển lớp có log ───────────────────────────────────────
+        public static OperationResult ChuyenLop(string maSV, string maLopMoi, string lyDo, string nguoiDuyet)
+        {
+            if (string.IsNullOrWhiteSpace(maSV))
+                return OperationResult.Fail("Mã sinh viên là bắt buộc.");
+            if (string.IsNullOrWhiteSpace(maLopMoi))
+                return OperationResult.Fail("Lớp mới là bắt buộc.");
+            return SinhVienDAL.ChuyenLop(
+                maSV.Trim().ToUpperInvariant(),
+                maLopMoi.Trim(),
+                string.IsNullOrWhiteSpace(lyDo)        ? null : lyDo.Trim(),
+                string.IsNullOrWhiteSpace(nguoiDuyet)  ? null : nguoiDuyet.Trim()
+            );
+        }
     }
 }

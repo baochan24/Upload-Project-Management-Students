@@ -4,7 +4,10 @@
       "Bash(start \"\" \"D:\\\\\\\\doAnHQTCSDL\\\\\\\\UI\\\\\\\\bin\\\\\\\\Debug\\\\\\\\net48\\\\\\\\QuanLySinhVienWinForms.exe\"2)",
       "Bash(start:*)",
       "Bash(dotnet build:*)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Bash(grep -n \"SHA_256\\\\|where @MaKhoaHoc = @\\\\|where @MaLopSH = @\\\\|TenLHP\\\\|ALTER FUNCTION\\\\|ALTER TRIGGER trg_Tinh\\\\|Dang hoc\\\\|GO$\" DataSetFinal.sql2)",
+      "Bash(powershell:*)",
+      "Bash(dir:*)"
     ]
   }
 }

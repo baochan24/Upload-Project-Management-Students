@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("QuanLySinhVienWinForms")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cc4ae3d1ac0df812fe4126655a43ec013d328f59")]
 [assembly: System.Reflection.AssemblyProductAttribute("QuanLySinhVienWinForms")]
 [assembly: System.Reflection.AssemblyTitleAttribute("QuanLySinhVienWinForms")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

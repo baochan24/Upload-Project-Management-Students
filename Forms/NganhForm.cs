@@ -65,7 +65,7 @@ namespace QuanLySinhVien.Forms
 
         private void NganhForm_Load(object sender, EventArgs e)
         {
-            cmbMaKhoa.DisplayMember = "MaKhoa";
+            cmbMaKhoa.DisplayMember = "TenKhoa";
             cmbMaKhoa.ValueMember   = "MaKhoa";
             cmbMaKhoa.DataSource    = CommonDAL.LoadLookup("sp_LayDanhSachKhoa");
             LoadData();

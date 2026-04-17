@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj": {}
+    "d:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj": {}
   },
   "projects": {
-    "D:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj": {
+    "d:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj",
+        "projectUniqueName": "d:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj",
         "projectName": "QuanLySinhVienWinForms",
-        "projectPath": "D:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj",
+        "projectPath": "d:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj",
         "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
-        "outputPath": "D:\\doAnHQTCSDL\\UI\\obj\\",
+        "outputPath": "d:\\doAnHQTCSDL\\UI\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

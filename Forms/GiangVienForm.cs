@@ -101,7 +101,7 @@ namespace QuanLySinhVien.Forms
 
         private void GiangVienForm_Load(object sender, EventArgs e)
         {
-            cmbMaKhoa.DisplayMember = "MaKhoa";
+            cmbMaKhoa.DisplayMember = "TenKhoa";
             cmbMaKhoa.ValueMember   = "MaKhoa";
             cmbMaKhoa.DataSource    = CommonDAL.LoadLookup("sp_LayDanhSachKhoa");
             LoadData();
@@ -120,14 +120,18 @@ namespace QuanLySinhVien.Forms
                 txtMaGV.Text            = row["MaGV"]?.ToString();
                 txtHoTen.Text           = row["HoTen"]?.ToString();
                 cmbMaKhoa.SelectedValue = row["MaKhoa"]?.ToString();
-                txtEmail.Text           = row["Email"]?.ToString();
-                txtSoDienThoai.Text     = row["SoDienThoai"]?.ToString();
-                txtHocVi.Text           = row["HocVi"]?.ToString();
-                txtHocHam.Text          = row["HocHam"]?.ToString();
+                txtEmail.Text           = row["Email"]  == DBNull.Value ? string.Empty : row["Email"]?.ToString();
+                txtSoDienThoai.Text     = row["SoDienThoai"] == DBNull.Value ? string.Empty : row["SoDienThoai"]?.ToString();
+                // HocVi / HocHam: SP trả về NULL thuần → textbox để rỗng khi chưa nhập
+                txtHocVi.Text           = row["HocVi"]  == DBNull.Value ? string.Empty : row["HocVi"]?.ToString();
+                txtHocHam.Text          = row["HocHam"] == DBNull.Value ? string.Empty : row["HocHam"]?.ToString();
 
+                // GioiTinh: SP trả về cột BIT (true/false/NULL)
                 var gt = row["GioiTinh"];
-                if (gt == DBNull.Value || gt == null) cmbGioiTinh.SelectedIndex = 0;
-                else cmbGioiTinh.SelectedIndex = (bool)gt ? 1 : 2;
+                if (gt == DBNull.Value || gt == null)
+                    cmbGioiTinh.SelectedIndex = 0;
+                else
+                    cmbGioiTinh.SelectedIndex = Convert.ToBoolean(gt) ? 1 : 2;
 
                 var ns = row["NgaySinh"];
                 if (ns != DBNull.Value && ns != null)

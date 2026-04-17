@@ -1,0 +1,3 @@
+dotnet build UI.sln
+.\bin\Debug\net48\QuanLySinhVienWinForms.exe
+ cách để run app

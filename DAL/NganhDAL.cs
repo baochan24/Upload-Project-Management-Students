@@ -47,7 +47,7 @@ namespace QuanLySinhVien.DAL
                 new SqlParameter("@MaNganh", SqlDbType.VarChar, 10) { Value = maNganh },
                 rp
             });
-            return CreateResult(rp);
+            return CreateDeleteResult(rp);
         }
 
         private static OperationResult CreateResult(SqlParameter rp)
@@ -56,10 +56,21 @@ namespace QuanLySinhVien.DAL
             return code switch
             {
                 1  => OperationResult.Ok(),
-                -1 => OperationResult.Fail("Mã ngành đã tồn tại hoặc không tồn tại."),
+                -1 => OperationResult.Fail("Mã ngành đã tồn tại."),
                 -2 => OperationResult.Fail("Vui lòng nhập đầy đủ thông tin."),
                 -3 => OperationResult.Fail("Khoa không tồn tại."),
-                -4 => OperationResult.Fail("Không thể xóa ngành đang có lớp sinh hoạt."),
+                _  => OperationResult.Fail("Thao tác thất bại.")
+            };
+        }
+
+        private static OperationResult CreateDeleteResult(SqlParameter rp)
+        {
+            var code = rp.Value == DBNull.Value ? 0 : (int)rp.Value;
+            return code switch
+            {
+                1  => OperationResult.Ok(),
+                -1 => OperationResult.Fail("Không tìm thấy ngành này."),
+                -2 => OperationResult.Fail("Không thể xóa: ngành đang có lớp sinh hoạt."),
                 _  => OperationResult.Fail("Thao tác thất bại.")
             };
         }

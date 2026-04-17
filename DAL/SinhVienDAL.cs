@@ -69,6 +69,55 @@ namespace QuanLySinhVien.DAL
             return CreateResult(resultParameter);
         }
 
+        // ── SV03: Soft delete – đổi TinhTrang ────────────────────────────
+        public static OperationResult CapNhatTinhTrang(string maSV, string tinhTrangMoi)
+        {
+            var rp = new SqlParameter("@ResultCode", SqlDbType.Int) { Direction = ParameterDirection.Output };
+            DatabaseHelper.ExecuteNonQuery("sp_CapNhatTinhTrangSinhVien", new[]
+            {
+                new SqlParameter("@MaSV",         SqlDbType.VarChar,   10) { Value = maSV },
+                new SqlParameter("@TinhTrangMoi",  SqlDbType.NVarChar,  20) { Value = tinhTrangMoi },
+                rp
+            });
+            var code = rp.Value == DBNull.Value ? 0 : (int)rp.Value;
+            return code switch
+            {
+                1  => OperationResult.Ok("Cập nhật tình trạng sinh viên thành công."),
+                -1 => OperationResult.Fail("Không tìm thấy sinh viên."),
+                -2 => OperationResult.Fail("Giá trị tình trạng không hợp lệ."),
+                _  => OperationResult.Fail("Thao tác thất bại.")
+            };
+        }
+
+        // ── SV06: Xem chi tiết hồ sơ (2 result sets) ─────────────────────
+        public static DataTable[] LayChiTiet(string maSV)
+        {
+            var p = new SqlParameter("@MaSV", SqlDbType.VarChar, 10) { Value = maSV };
+            return DatabaseHelper.ExecuteMultipleResultSets("sp_LayChiTietSinhVien", 2, p);
+        }
+
+        // ── SV07: Chuyển lớp có log ───────────────────────────────────────
+        public static OperationResult ChuyenLop(string maSV, string maLopMoi, string lyDo, string nguoiDuyet)
+        {
+            var rp = new SqlParameter("@ResultCode", SqlDbType.Int) { Direction = ParameterDirection.Output };
+            DatabaseHelper.ExecuteNonQuery("sp_ChuyenLop_CoLog", new[]
+            {
+                new SqlParameter("@MaSV",       SqlDbType.VarChar,   10)  { Value = maSV },
+                new SqlParameter("@MaLopMoi",   SqlDbType.VarChar,   15)  { Value = maLopMoi },
+                new SqlParameter("@LyDo",       SqlDbType.NVarChar, 200)  { Value = (object)lyDo ?? DBNull.Value },
+                new SqlParameter("@NguoiDuyet", SqlDbType.NVarChar, 100)  { Value = (object)nguoiDuyet ?? DBNull.Value },
+                rp
+            });
+            var code = rp.Value == DBNull.Value ? 0 : (int)rp.Value;
+            return code switch
+            {
+                1  => OperationResult.Ok("Chuyển lớp thành công."),
+                -1 => OperationResult.Fail("Sinh viên không tồn tại hoặc không đang học."),
+                -2 => OperationResult.Fail("Lớp sinh hoạt mới không tồn tại."),
+                _  => OperationResult.Fail("Thao tác thất bại.")
+            };
+        }
+
         private static OperationResult CreateResult(SqlParameter resultParameter)
         {
             var code = resultParameter.Value == DBNull.Value ? 0 : (int)resultParameter.Value;

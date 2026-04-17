@@ -87,5 +87,29 @@ namespace QuanLySinhVien.DAL
                 return command.ExecuteScalar();
             }
         }
+
+        /// <summary>
+        /// Thực thi stored procedure trả về nhiều result set.
+        /// </summary>
+        public static DataTable[] ExecuteMultipleResultSets(string storedProcedure, int resultSetCount, params SqlParameter[] parameters)
+        {
+            var results = new DataTable[resultSetCount];
+            for (int i = 0; i < resultSetCount; i++) results[i] = new DataTable();
+
+            using (var connection = CreateConnection())
+            using (var command = CreateCommand(connection, storedProcedure, CommandType.StoredProcedure, parameters))
+            {
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    for (int i = 0; i < resultSetCount; i++)
+                    {
+                        results[i].Load(reader);
+                        if (i < resultSetCount - 1 && !reader.NextResult()) break;
+                    }
+                }
+            }
+            return results;
+        }
     }
 }
