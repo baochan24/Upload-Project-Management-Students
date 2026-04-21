@@ -62,5 +62,27 @@ namespace QuanLySinhVien.DAL
                 return OperationResult.Fail(ex.Message);
             }
         }
+
+        /// <summary>
+        /// Kiểm tra giảng viên có quyền sửa điểm cho lớp học phần không.
+        /// Trả về: 1 = có quyền, -1 = lớp không tồn tại, -2 = không phải GV của lớp.
+        /// </summary>
+        public static int KiemTraQuyenSuaDiem(string maLHP, string maGV)
+        {
+            var resultParam = new SqlParameter("@ResultCode", SqlDbType.Int) { Direction = ParameterDirection.Output };
+            DatabaseHelper.ExecuteNonQuery("sp_KiemTraQuyenSuaDiem",
+                new SqlParameter("@MaLHP", SqlDbType.VarChar, 20) { Value = maLHP },
+                new SqlParameter("@MaGV",  SqlDbType.VarChar, 10) { Value = maGV  },
+                resultParam);
+            return resultParam.Value == DBNull.Value ? 0 : (int)resultParam.Value;
+        }
+
+        /// <summary>Lấy bảng điểm cá nhân của sinh viên (gọi sp_LayDiemSinhVienCaNhan).</summary>
+        public static DataTable LayDiemCaNhan(string maSV, string maHocKy = null)
+        {
+            return DatabaseHelper.ExecuteDataTable("sp_LayDiemSinhVienCaNhan",
+                new SqlParameter("@MaSV",    SqlDbType.VarChar, 10)  { Value = maSV },
+                new SqlParameter("@MaHocKy", SqlDbType.VarChar, 10)  { Value = (object)maHocKy ?? DBNull.Value });
+        }
     }
 }

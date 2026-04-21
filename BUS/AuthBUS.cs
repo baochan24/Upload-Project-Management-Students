@@ -33,11 +33,12 @@ namespace QuanLySinhVien.BUS
             if (row == null)
                 return;
 
-            UserSession.UserID = row.Field<int>("UserID");
-            UserSession.Username = row.Field<string>("Username");
-            UserSession.RoleName = row.Field<string>("RoleName");
+            UserSession.UserID      = row.Field<int>("UserID");
+            UserSession.RoleID      = row.Field<int>("RoleID");
+            UserSession.Username    = row.Field<string>("Username");
+            UserSession.RoleName    = row.Field<string>("RoleName");
             UserSession.MaNguoiDung = row.Field<string>("MaNguoiDung");
-            UserSession.Email = row.Field<string>("Email");
+            UserSession.Email       = row.Field<string>("Email");
         }
     }
 }

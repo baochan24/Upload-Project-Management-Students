@@ -1,4 +1,4 @@
-﻿USE master;
+USE master;
 GO
 DROP DATABASE IF EXISTS QuanLySinhVien;
 GO
@@ -236,6 +236,404 @@ CREATE TABLE HocPhi (
 );
 
 go
+
+-- Kiểm tra và thêm cột DiaChi nếu chưa có
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+               WHERE TABLE_NAME = 'SinhVien' AND COLUMN_NAME = 'DiaChi')
+BEGIN
+    ALTER TABLE SinhVien ADD DiaChi NVARCHAR(200) NULL;
+    PRINT N'Đã thêm cột DiaChi vào bảng SinhVien';
+END
+ELSE
+    PRINT N'Cột DiaChi đã tồn tại';
+GO
+
+-- Kiểm tra bảng HocPhi có tồn tại không
+IF OBJECT_ID('HocPhi', 'U') IS NULL
+BEGIN
+    PRINT N'Đang tạo bảng HocPhi...';
+    
+    CREATE TABLE HocPhi (
+        MaHocPhi       INT IDENTITY PRIMARY KEY,
+        MaSV           VARCHAR(10)  NOT NULL,
+        MaHocKy        VARCHAR(10)  NOT NULL,
+        SoTinChiDangKy INT          NOT NULL DEFAULT 0,
+        TongHocPhi     FLOAT        NOT NULL DEFAULT 0,
+        DaDong         FLOAT        DEFAULT 0,
+        TrangThai      NVARCHAR(20) DEFAULT N'Chưa đóng',
+        NgayDong       DATETIME     NULL,
+        FOREIGN KEY (MaSV)    REFERENCES SinhVien(MaSV),
+        FOREIGN KEY (MaHocKy) REFERENCES HocKy(MaHocKy)
+    );
+    
+    PRINT N'Đã tạo bảng HocPhi thành công!';
+END
+ELSE
+BEGIN
+    PRINT N'Bảng HocPhi đã tồn tại, kiểm tra cấu trúc...';
+    
+    -- Kiểm tra cấu trúc bảng
+    SELECT COLUMN_NAME, DATA_TYPE 
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'HocPhi'
+    ORDER BY ORDINAL_POSITION;
+END
+GO
+
+--Quan Ly diem so va xep loai 
+
+-- TẠO CHỈ MỤC (INDEX)
+CREATE INDEX IX_DangKy_MaLHP ON DangKy(MaLHP);
+CREATE INDEX IX_DangKy_MaSV ON DangKy(MaSV);
+CREATE INDEX IX_Diem_MaDK ON Diem(MaDK);
+CREATE INDEX IX_Diem_TrangThai ON Diem(TrangThaiDiem);
+CREATE INDEX IX_LichSuSuaDiem_MaDiem ON LichSuSuaDiem(MaDiem);
+GO
+
+PRINT N'Đã tạo xong toàn bộ đối tượng trong database QLDiem.';
+
+--Bao cao va thong ke
+
+-- =====================================================
+-- VIEW 1: vw_ThongKeSinhVienTheoKhoa
+-- =====================================================
+USE QuanLySinhVien;
+GO
+--Quan Ly Dang Ki Hoc Phan 
+CREATE VIEW vw_LopHocPhanDayDu AS
+SELECT 
+    lhp.MaLHP, 
+    m.TenMon, 
+    m.SoTinChi, 
+    gv.HoTen AS TenGV, 
+    p.TenPhong, 
+    p.ViTri, 
+    hk.TenHocKy, 
+    hk.NamHoc,
+    lhp.Thu,
+    lhp.TietBatDau,
+    lhp.TietKetThuc,
+    lhp.SiSoToiDa,
+    lhp.SiSoHienTai
+FROM LopHocPhan lhp, MonHoc m, GiangVien gv, PhongHoc p, HocKy hk
+WHERE lhp.MaMon = m.MaMon 
+  AND lhp.MaGV = gv.MaGV 
+  AND lhp.MaPhong = p.MaPhong 
+  AND lhp.MaHocKy = hk.MaHocKy;
+GO
+
+CREATE VIEW vw_DangKyCuaSV AS
+SELECT 
+    dk.MaSV, 
+    dk.MaLHP, 
+    lhp.Thu, 
+    lhp.TietBatDau, 
+    lhp.TietKetThuc, 
+    m.TenMon, 
+    m.SoTinChi
+FROM DangKy dk, LopHocPhan lhp, MonHoc m
+WHERE dk.MaLHP = lhp.MaLHP 
+  AND lhp.MaMon = m.MaMon
+  AND dk.TrangThai = N'Đã đăng ký';
+GO
+
+-- TẠO VIEW
+-- Ghi chú: LopHocPhan không có cột TenLHP; dùng MaLopHienThi đặt alias TenLHP
+CREATE OR ALTER VIEW vw_DiemSinhVien
+AS
+SELECT
+    sv.MaSV,
+    sv.HoTen,
+    mh.TenMon,
+    mh.SoTinChi,
+    d.DiemChuyenCan,
+    d.DiemGiuaKy,
+    d.DiemCuoiKy,
+    d.DiemTongKet,
+    d.XepLoai,
+    d.TrangThaiDiem,
+    lhp.MaLHP,
+    lhp.MaLopHienThi AS TenLHP   -- alias giữ tên cũ cho tương thích
+FROM Diem d
+JOIN DangKy     dk  ON d.MaDK   = dk.MaDK
+JOIN SinhVien   sv  ON dk.MaSV  = sv.MaSV
+JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
+JOIN MonHoc     mh  ON lhp.MaMon = mh.MaMon;
+GO
+
+CREATE OR ALTER VIEW vw_BangDiemLop
+AS
+SELECT
+    lhp.MaLHP,
+    lhp.MaLopHienThi AS TenLHP,  -- alias giữ tên cũ cho tương thích
+    mh.TenMon,
+    mh.SoTinChi,
+    sv.MaSV,
+    sv.HoTen,
+    d.DiemChuyenCan,
+    d.DiemGiuaKy,
+    d.DiemCuoiKy,
+    d.DiemTongKet,
+    d.XepLoai,
+    d.TrangThaiDiem
+FROM LopHocPhan lhp
+JOIN MonHoc mh ON lhp.MaMon = mh.MaMon
+JOIN DangKy dk ON lhp.MaLHP = dk.MaLHP
+JOIN SinhVien sv ON dk.MaSV = sv.MaSV
+JOIN Diem d ON dk.MaDK = d.MaDK;
+GO
+
+CREATE OR ALTER VIEW vw_ThongKeSinhVienTheoKhoa
+AS
+SELECT 
+    k.MaKhoa,
+    k.TenKhoa,
+    n.MaNganh,
+    n.TenNganh,
+    kh.MaKhoaHoc,
+    kh.TenKhoaHoc,
+    COUNT(sv.MaSV) AS SoLuongSinhVien,
+    SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS SoLuongDangHoc,
+    SUM(CASE WHEN sv.TinhTrang = N'Tốt nghiệp' THEN 1 ELSE 0 END) AS SoLuongTotNghiep,
+    SUM(CASE WHEN sv.TinhTrang = N'Nghỉ học' THEN 1 ELSE 0 END) AS SoLuongNghiHoc,
+    SUM(CASE WHEN sv.TinhTrang = N'Thôi học' THEN 1 ELSE 0 END) AS SoLuongThoiHoc
+FROM SinhVien sv
+JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
+JOIN Nganh n ON l.MaNganh = n.MaNganh
+JOIN Khoa k ON n.MaKhoa = k.MaKhoa
+JOIN KhoaHoc kh ON l.MaKhoaHoc = kh.MaKhoaHoc
+GROUP BY k.MaKhoa, k.TenKhoa, n.MaNganh, n.TenNganh, kh.MaKhoaHoc, kh.TenKhoaHoc;
+GO
+
+-- =====================================================
+-- VIEW 2: vw_KetQuaHocTapTheoKy
+-- =====================================================
+CREATE OR ALTER VIEW vw_KetQuaHocTapTheoKy
+AS
+SELECT 
+    hk.MaHocKy,
+    hk.TenHocKy,
+    hk.NamHoc,
+    d.XepLoai,
+    COUNT(*) AS SoLuong,
+    AVG(d.DiemTongKet) AS DiemTrungBinh
+FROM Diem d
+JOIN DangKy dk ON d.MaDK = dk.MaDK
+JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
+JOIN HocKy hk ON lhp.MaHocKy = hk.MaHocKy
+WHERE d.XepLoai IS NOT NULL 
+  AND d.TrangThaiDiem = N'Đã khóa'
+GROUP BY hk.MaHocKy, hk.TenHocKy, hk.NamHoc, d.XepLoai;
+GO
+
+-- =====================================================
+-- VIEW 3: vw_ThongKeSVTheoLop
+-- =====================================================
+CREATE OR ALTER VIEW vw_ThongKeSVTheoLop
+AS
+SELECT 
+    l.MaLopSH,
+    l.TenLop,
+    n.TenNganh,
+    k.TenKhoa,
+    kh.TenKhoaHoc,
+    COUNT(sv.MaSV) AS SiSo,
+    SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS SoLuongDangHoc,
+    SUM(CASE WHEN sv.GioiTinh = 1 THEN 1 ELSE 0 END) AS SoLuongNam,
+    SUM(CASE WHEN sv.GioiTinh = 0 THEN 1 ELSE 0 END) AS SoLuongNu
+FROM LopSinhHoat l
+LEFT JOIN SinhVien sv ON l.MaLopSH = sv.MaLopSH
+JOIN Nganh n ON l.MaNganh = n.MaNganh
+JOIN Khoa k ON n.MaKhoa = k.MaKhoa
+JOIN KhoaHoc kh ON l.MaKhoaHoc = kh.MaKhoaHoc
+GROUP BY l.MaLopSH, l.TenLop, n.TenNganh, k.TenKhoa, kh.TenKhoaHoc;
+GO
+
+-- =====================================================
+-- VIEW 4: vw_DiemTrungBinhSinhVien
+-- =====================================================
+CREATE OR ALTER VIEW vw_DiemTrungBinhSinhVien
+AS
+SELECT 
+    sv.MaSV,
+    sv.HoTen,
+    l.TenLop,
+    n.TenNganh,
+    AVG(d.DiemTongKet) AS DiemTrungBinh,
+    MAX(CASE WHEN d.XepLoai IN (N'Xuất sắc', N'Giỏi') THEN 1 ELSE 0 END) AS DaDatGioi
+FROM SinhVien sv
+JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
+JOIN Nganh n ON l.MaNganh = n.MaNganh
+LEFT JOIN DangKy dk ON sv.MaSV = dk.MaSV
+LEFT JOIN Diem d ON dk.MaDK = d.MaDK AND d.TrangThaiDiem = N'Đã khóa'
+GROUP BY sv.MaSV, sv.HoTen, l.TenLop, n.TenNganh;
+GO
+
+-- Kiem tra view (bo comment de test): SELECT * FROM vw_KetQuaHocTapTheoKy
+GO
+
+Create function fn_KiemTraQuyen(
+   @RoleID int ,
+   @Module NVARCHAR(50),
+   @LoaiQuyen NVARCHAR(20)
+ )
+Returns bit -- tra ve don vi bit : =1 co quyen , = 0 khong co quyen truy cap
+as 
+begin 
+   declare @KetQua BIT = 0 
+   select @KetQua = 
+     case @LoaiQuyen 
+        when 'View' then CanView
+        when 'Add' then CanAdd
+        when 'Edit' then CanEdit
+        when 'Delete' then CanDelete
+        when 'Approve' then CanApprove
+        Else 0 
+    end 
+from PhanQuyen
+Where RoleID = @RoleID
+ and ModuleName = @Module
+return @KetQua
+end
+
+go
+
+CREATE FUNCTION fn_TongTinChiDangKy (@maSV VARCHAR(10), @maHocKy VARCHAR(10))
+RETURNS INT
+AS 
+BEGIN
+    DECLARE @tongTinChi INT;
+    
+    SELECT @tongTinChi = ISNULL(SUM(m.SoTinChi), 0)
+    FROM DangKy dk, LopHocPhan lhp, MonHoc m
+    WHERE dk.MaLHP = lhp.MaLHP 
+      AND lhp.MaMon = m.MaMon
+      AND dk.MaSV = @maSV 
+      AND lhp.MaHocKy = @maHocKy 
+      AND dk.TrangThai = N'Đã đăng ký';
+      
+    RETURN @tongTinChi;
+END;
+GO
+
+CREATE FUNCTION fn_KiemTraTrungLich (@maSV VARCHAR(10), @maLHPMoi VARCHAR(20))
+RETURNS BIT
+AS 
+BEGIN
+    DECLARE @isTrung BIT = 0;
+    DECLARE @thu TINYINT, @tietBD TINYINT, @tietKT TINYINT, @maHocKy VARCHAR(10);
+
+    SELECT @thu = Thu, @tietBD = TietBatDau, @tietKT = TietKetThuc, @maHocKy = MaHocKy
+    FROM LopHocPhan 
+    WHERE MaLHP = @maLHPMoi;
+
+    IF EXISTS (
+        SELECT 1 
+        FROM DangKy dk, LopHocPhan lhp
+        WHERE dk.MaLHP = lhp.MaLHP
+          AND dk.MaSV = @maSV 
+          AND lhp.MaHocKy = @maHocKy
+          AND dk.TrangThai = N'Đã đăng ký'
+          AND lhp.Thu = @thu
+          AND lhp.TietBatDau <= @tietKT 
+          AND lhp.TietKetThuc >= @tietBD
+    )
+    BEGIN
+        SET @isTrung = 1;
+    END
+
+    RETURN @isTrung;
+END;
+GO
+
+-- TẠO FUNCTION
+CREATE FUNCTION fn_DiemTongKet (
+    @cc FLOAT,
+    @gk FLOAT,
+    @ck FLOAT
+)
+RETURNS FLOAT
+AS
+BEGIN
+    IF @cc IS NULL OR @gk IS NULL OR @ck IS NULL
+        RETURN NULL;
+    RETURN ROUND(@cc * 0.1 + @gk * 0.3 + @ck * 0.6, 2);
+END;
+GO
+
+CREATE OR ALTER FUNCTION fn_XepLoai (
+    @diemTK FLOAT
+)
+RETURNS NVARCHAR(20)
+AS
+BEGIN
+    IF @diemTK IS NULL
+        RETURN NULL;
+    RETURN CASE
+        WHEN @diemTK >= 8.5 THEN N'Giỏi'
+        WHEN @diemTK >= 8.0 THEN N'Khá giỏi'
+        WHEN @diemTK >= 7.0 THEN N'Khá'
+        WHEN @diemTK >= 6.5 THEN N'Trung bình khá'
+        WHEN @diemTK >= 5.5 THEN N'Trung bình'
+        WHEN @diemTK >= 5.0 THEN N'Trung bình yếu'
+        WHEN @diemTK >= 4.0 THEN N'Yếu'
+        WHEN @diemTK < 4.0 THEN N'Kém'
+    END;
+END;
+GO
+-- =====================================================
+-- FUNCTION 1: fn_ThongKeSVTheoKhoa
+-- =====================================================
+CREATE OR ALTER FUNCTION fn_ThongKeSVTheoKhoa (@maKhoa VARCHAR(10))
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        n.MaNganh,
+        n.TenNganh,
+        COUNT(sv.MaSV) AS TongSoSV,
+        SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS DangHoc,
+        SUM(CASE WHEN sv.TinhTrang = N'Tốt nghiệp' THEN 1 ELSE 0 END) AS TotNghiep,
+        SUM(CASE WHEN sv.TinhTrang IN (N'Nghỉ học', N'Thôi học') THEN 1 ELSE 0 END) AS NgungHoc
+    FROM Nganh n
+    LEFT JOIN LopSinhHoat l ON n.MaNganh = l.MaNganh
+    LEFT JOIN SinhVien sv ON l.MaLopSH = sv.MaLopSH
+    WHERE n.MaKhoa = @maKhoa
+    GROUP BY n.MaNganh, n.TenNganh
+);
+GO
+
+-- =====================================================
+-- FUNCTION 2: fn_TyLeXepLoai
+-- =====================================================
+CREATE OR ALTER FUNCTION fn_TyLeXepLoai (@maHocKy VARCHAR(10))
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH ThongKe AS (
+        SELECT 
+            XepLoai,
+            COUNT(*) AS SoLuong
+        FROM Diem d
+        JOIN DangKy dk ON d.MaDK = dk.MaDK
+        JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
+        WHERE lhp.MaHocKy = @maHocKy
+          AND d.XepLoai IS NOT NULL
+          AND d.TrangThaiDiem = N'Đã khóa'
+        GROUP BY XepLoai
+    )
+    SELECT 
+        XepLoai,
+        SoLuong,
+        CAST(SoLuong * 100.0 / SUM(SoLuong) OVER() AS DECIMAL(5,2)) AS TyLePhanTram
+    FROM ThongKe
+);
+GO
+
+-- Kiem tra function (bo comment de test): SELECT * FROM fn_ThongKeSVTheoKhoa('CNTT')
+GO
 --login 
 Create Procedure sp_Login 
 @Username varchar(50),
@@ -380,32 +778,6 @@ begin
  end
 
  go
-
-Create function fn_KiemTraQuyen(
-   @RoleID int ,
-   @Module NVARCHAR(50),
-   @LoaiQuyen NVARCHAR(20)
- )
-Returns bit -- tra ve don vi bit : =1 co quyen , = 0 khong co quyen truy cap
-as 
-begin 
-   declare @KetQua BIT = 0 
-   select @KetQua = 
-     case @LoaiQuyen 
-        when 'View' then CanView
-        when 'Add' then CanAdd
-        when 'Edit' then CanEdit
-        when 'Delete' then CanDelete
-        when 'Approve' then CanApprove
-        Else 0 
-    end 
-from PhanQuyen
-Where RoleID = @RoleID
- and ModuleName = @Module
-return @KetQua
-end
-
-go
 
 create procedure sp_GetPermissionsByRole
   @RoleID int 
@@ -2632,1037 +3004,215 @@ BEGIN
         COMMIT     -- đảm bảo Durability
 END;
 go
---Quan Ly Dang Ki Hoc Phan 
-CREATE VIEW vw_LopHocPhanDayDu AS
-SELECT 
-    lhp.MaLHP, 
-    m.TenMon, 
-    m.SoTinChi, 
-    gv.HoTen AS TenGV, 
-    p.TenPhong, 
-    p.ViTri, 
-    hk.TenHocKy, 
-    hk.NamHoc,
-    lhp.Thu,
-    lhp.TietBatDau,
-    lhp.TietKetThuc,
-    lhp.SiSoToiDa,
-    lhp.SiSoHienTai
-FROM LopHocPhan lhp, MonHoc m, GiangVien gv, PhongHoc p, HocKy hk
-WHERE lhp.MaMon = m.MaMon 
-  AND lhp.MaGV = gv.MaGV 
-  AND lhp.MaPhong = p.MaPhong 
-  AND lhp.MaHocKy = hk.MaHocKy;
-GO
 
-CREATE VIEW vw_DangKyCuaSV AS
-SELECT 
-    dk.MaSV, 
-    dk.MaLHP, 
-    lhp.Thu, 
-    lhp.TietBatDau, 
-    lhp.TietKetThuc, 
-    m.TenMon, 
-    m.SoTinChi
-FROM DangKy dk, LopHocPhan lhp, MonHoc m
-WHERE dk.MaLHP = lhp.MaLHP 
-  AND lhp.MaMon = m.MaMon
-  AND dk.TrangThai = N'Đã đăng ký';
-GO
+-- =====================================================
+-- BỔ SUNG: CÁC STORED PROCEDURE CÒN THIẾU
+-- =====================================================
 
-CREATE FUNCTION fn_TongTinChiDangKy (@maSV VARCHAR(10), @maHocKy VARCHAR(10))
-RETURNS INT
-AS 
+-- =====================================================
+-- SV03: sp_CapNhatTinhTrangSinhVien
+-- Mục đích: Soft-delete – chỉ đổi TinhTrang, không xóa vật lý
+-- ResultCode: 1=OK, -1=không tìm thấy SV, -2=giá trị TinhTrang không hợp lệ
+-- =====================================================
+GO
+CREATE OR ALTER PROCEDURE sp_CapNhatTinhTrangSinhVien
+    @MaSV        VARCHAR(10),
+    @TinhTrangMoi NVARCHAR(20),
+    @ResultCode  INT OUTPUT
+AS
 BEGIN
-    DECLARE @tongTinChi INT;
-    
-    SELECT @tongTinChi = ISNULL(SUM(m.SoTinChi), 0)
-    FROM DangKy dk, LopHocPhan lhp, MonHoc m
-    WHERE dk.MaLHP = lhp.MaLHP 
-      AND lhp.MaMon = m.MaMon
-      AND dk.MaSV = @maSV 
-      AND lhp.MaHocKy = @maHocKy 
-      AND dk.TrangThai = N'Đã đăng ký';
-      
-    RETURN @tongTinChi;
-END;
-GO
+    SET NOCOUNT ON;
 
-CREATE FUNCTION fn_KiemTraTrungLich (@maSV VARCHAR(10), @maLHPMoi VARCHAR(20))
-RETURNS BIT
-AS 
-BEGIN
-    DECLARE @isTrung BIT = 0;
-    DECLARE @thu TINYINT, @tietBD TINYINT, @tietKT TINYINT, @maHocKy VARCHAR(10);
-
-    SELECT @thu = Thu, @tietBD = TietBatDau, @tietKT = TietKetThuc, @maHocKy = MaHocKy
-    FROM LopHocPhan 
-    WHERE MaLHP = @maLHPMoi;
-
-    IF EXISTS (
-        SELECT 1 
-        FROM DangKy dk, LopHocPhan lhp
-        WHERE dk.MaLHP = lhp.MaLHP
-          AND dk.MaSV = @maSV 
-          AND lhp.MaHocKy = @maHocKy
-          AND dk.TrangThai = N'Đã đăng ký'
-          AND lhp.Thu = @thu
-          AND lhp.TietBatDau <= @tietKT 
-          AND lhp.TietKetThuc >= @tietBD
-    )
+    -- Kiểm tra sinh viên tồn tại
+    IF NOT EXISTS (SELECT 1 FROM SinhVien WHERE MaSV = @MaSV)
     BEGIN
-        SET @isTrung = 1;
-    END
-
-    RETURN @isTrung;
-END;
-GO
-
-CREATE TRIGGER trg_KhongChoVuotSiSo
-ON DangKy
-INSTEAD OF INSERT
-AS 
-BEGIN
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i, LopHocPhan lhp
-        WHERE i.MaLHP = lhp.MaLHP 
-          AND lhp.SiSoHienTai >= lhp.SiSoToiDa
-    )
-    BEGIN
-        RAISERROR(N'Lớp học phần đã đạt sĩ số tối đa, không thể đăng ký!', 16, 1);
-        ROLLBACK TRANSACTION;
+        SET @ResultCode = -1;
         RETURN;
     END
 
-    INSERT INTO DangKy(MaSV, MaLHP, TrangThai)
-    SELECT MaSV, MaLHP, TrangThai FROM inserted;
-END;
-GO
-
-CREATE TRIGGER trg_CapNhatSiSo
-ON DangKy
-AFTER INSERT, UPDATE
-AS 
-BEGIN
-    UPDATE LopHocPhan
-    SET SiSoHienTai = (
-        SELECT COUNT(*) 
-        FROM DangKy 
-        WHERE MaLHP = LopHocPhan.MaLHP AND TrangThai = N'Đã đăng ký'
-    )
-    WHERE MaLHP IN (
-        SELECT MaLHP FROM inserted
-        UNION
-        SELECT MaLHP FROM deleted
-    );
-END;
-GO
-
-CREATE PROCEDURE sp_DangKyHocPhan
-    @maSV VARCHAR(10),
-    @maLHP VARCHAR(20)
-AS 
-BEGIN
-    SET NOCOUNT ON;
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; 
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        IF dbo.fn_KiemTraTrungLich(@maSV, @maLHP) = 1
-        BEGIN
-            RAISERROR(N'Bạn bị trùng lịch học với một môn khác đã đăng ký!', 16, 1);
-        END
-
-        DECLARE @maHocKy VARCHAR(10), @soTinToiDa INT, @soTinLHP INT;
-        
-        SELECT @maHocKy = MaHocKy FROM LopHocPhan WHERE MaLHP = @maLHP;
-        SELECT @soTinToiDa = SoTinToiDa FROM HocKy WHERE MaHocKy = @maHocKy;
-        
-        SELECT @soTinLHP = m.SoTinChi 
-        FROM MonHoc m, LopHocPhan lhp 
-        WHERE m.MaMon = lhp.MaMon 
-          AND lhp.MaLHP = @maLHP;
-
-        IF (dbo.fn_TongTinChiDangKy(@maSV, @maHocKy) + @soTinLHP) > @soTinToiDa
-        BEGIN
-            RAISERROR(N'Vượt quá số tín chỉ tối đa được phép trong học kỳ!', 16, 1);
-        END
-
-        INSERT INTO DangKy (MaSV, MaLHP, TrangThai)
-        VALUES (@maSV, @maLHP, N'Đã đăng ký');
-
-        COMMIT TRAN;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
-        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@ErrMsg, 16, 1);
-    END CATCH
-END;
-GO
-
-CREATE PROCEDURE sp_HuyDangKy
-    @maSV VARCHAR(10),
-    @maLHP VARCHAR(20)
-AS 
-BEGIN
-    SET NOCOUNT ON;
-    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        IF EXISTS (
-            SELECT 1 FROM DangKy WITH (UPDLOCK) 
-            WHERE MaSV = @maSV AND MaLHP = @maLHP AND TrangThai = N'Đã đăng ký'
-        )
-        BEGIN
-            UPDATE DangKy 
-            SET TrangThai = N'Đã hủy' 
-            WHERE MaSV = @maSV AND MaLHP = @maLHP;
-        END
-        ELSE 
-        BEGIN
-            RAISERROR(N'Học phần này chưa được đăng ký hoặc đã bị hủy trước đó!', 16, 1);
-        END
-
-        COMMIT TRAN;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
-        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@ErrMsg, 16, 1);
-    END CATCH
-END;
-GO
-
---Quan Ly diem so va xep loai 
-
--- TẠO CHỈ MỤC (INDEX)
-CREATE INDEX IX_DangKy_MaLHP ON DangKy(MaLHP);
-CREATE INDEX IX_DangKy_MaSV ON DangKy(MaSV);
-CREATE INDEX IX_Diem_MaDK ON Diem(MaDK);
-CREATE INDEX IX_Diem_TrangThai ON Diem(TrangThaiDiem);
-CREATE INDEX IX_LichSuSuaDiem_MaDiem ON LichSuSuaDiem(MaDiem);
-GO
-
--- TẠO FUNCTION
-CREATE FUNCTION fn_DiemTongKet (
-    @cc FLOAT,
-    @gk FLOAT,
-    @ck FLOAT
-)
-RETURNS FLOAT
-AS
-BEGIN
-    IF @cc IS NULL OR @gk IS NULL OR @ck IS NULL
-        RETURN NULL;
-    RETURN ROUND(@cc * 0.1 + @gk * 0.3 + @ck * 0.6, 2);
-END;
-GO
-
-CREATE OR ALTER FUNCTION fn_XepLoai (
-    @diemTK FLOAT
-)
-RETURNS NVARCHAR(20)
-AS
-BEGIN
-    IF @diemTK IS NULL
-        RETURN NULL;
-    RETURN CASE
-        WHEN @diemTK >= 8.5 THEN N'Giỏi'
-        WHEN @diemTK >= 8.0 THEN N'Khá giỏi'
-        WHEN @diemTK >= 7.0 THEN N'Khá'
-        WHEN @diemTK >= 6.5 THEN N'Trung bình khá'
-        WHEN @diemTK >= 5.5 THEN N'Trung bình'
-        WHEN @diemTK >= 5.0 THEN N'Trung bình yếu'
-        WHEN @diemTK >= 4.0 THEN N'Yếu'
-        WHEN @diemTK < 4.0 THEN N'Kém'
-    END;
-END;
-GO
-
--- TẠO TRIGGER
-CREATE OR ALTER TRIGGER trg_TinhDiemTongKet
-ON Diem
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE d
-    SET 
-        DiemTongKet = dbo.fn_DiemTongKet(i.DiemChuyenCan, i.DiemGiuaKy, i.DiemCuoiKy),
-        XepLoai = dbo.fn_XepLoai(dbo.fn_DiemTongKet(i.DiemChuyenCan, i.DiemGiuaKy, i.DiemCuoiKy))
-    FROM Diem d
-    INNER JOIN inserted i ON d.MaDiem = i.MaDiem;
-END;
-GO
-
-CREATE TRIGGER trg_KhoaDiem
-ON Diem
-INSTEAD OF UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    IF EXISTS (SELECT 1 FROM deleted WHERE TrangThaiDiem = N'Đã khóa')
+    -- Kiểm tra giá trị TinhTrang hợp lệ
+    IF @TinhTrangMoi NOT IN (N'Đang học', N'Nghỉ học', N'Thôi học', N'Tốt nghiệp')
     BEGIN
-        RAISERROR(N'Không thể sửa điểm vì điểm đã bị khóa!', 16, 1);
-        ROLLBACK TRANSACTION;
+        SET @ResultCode = -2;
         RETURN;
     END
 
-    UPDATE d
-    SET 
-        DiemChuyenCan = i.DiemChuyenCan,
-        DiemGiuaKy = i.DiemGiuaKy,
-        DiemCuoiKy = i.DiemCuoiKy,
-        TrangThaiDiem = i.TrangThaiDiem,
-        NgayXacNhan = i.NgayXacNhan
-    FROM Diem d
-    INNER JOIN inserted i ON d.MaDiem = i.MaDiem;
-END;
-GO
-
--- TẠO VIEW
--- Ghi chú: LopHocPhan không có cột TenLHP; dùng MaLopHienThi đặt alias TenLHP
-CREATE OR ALTER VIEW vw_DiemSinhVien
-AS
-SELECT
-    sv.MaSV,
-    sv.HoTen,
-    mh.TenMon,
-    mh.SoTinChi,
-    d.DiemChuyenCan,
-    d.DiemGiuaKy,
-    d.DiemCuoiKy,
-    d.DiemTongKet,
-    d.XepLoai,
-    d.TrangThaiDiem,
-    lhp.MaLHP,
-    lhp.MaLopHienThi AS TenLHP   -- alias giữ tên cũ cho tương thích
-FROM Diem d
-JOIN DangKy     dk  ON d.MaDK   = dk.MaDK
-JOIN SinhVien   sv  ON dk.MaSV  = sv.MaSV
-JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
-JOIN MonHoc     mh  ON lhp.MaMon = mh.MaMon;
-GO
-
-CREATE OR ALTER VIEW vw_BangDiemLop
-AS
-SELECT
-    lhp.MaLHP,
-    lhp.MaLopHienThi AS TenLHP,  -- alias giữ tên cũ cho tương thích
-    mh.TenMon,
-    mh.SoTinChi,
-    sv.MaSV,
-    sv.HoTen,
-    d.DiemChuyenCan,
-    d.DiemGiuaKy,
-    d.DiemCuoiKy,
-    d.DiemTongKet,
-    d.XepLoai,
-    d.TrangThaiDiem
-FROM LopHocPhan lhp
-JOIN MonHoc mh ON lhp.MaMon = mh.MaMon
-JOIN DangKy dk ON lhp.MaLHP = dk.MaLHP
-JOIN SinhVien sv ON dk.MaSV = sv.MaSV
-JOIN Diem d ON dk.MaDK = d.MaDK;
-GO
-
--- TẠO STORED PROCEDURE
-CREATE PROCEDURE sp_NhapDiem
-    @MaDK INT,
-    @DiemChuyenCan FLOAT = NULL,
-    @DiemGiuaKy FLOAT = NULL,
-    @DiemCuoiKy FLOAT = NULL,
-    @NguoiNhap NVARCHAR(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        IF NOT EXISTS (SELECT 1 FROM DangKy WHERE MaDK = @MaDK)
-        BEGIN
-            RAISERROR(N'Mã đăng ký không tồn tại!', 16, 1);
-            ROLLBACK;
-            RETURN;
-        END
-
-        IF EXISTS (SELECT 1 FROM Diem WHERE MaDK = @MaDK)
-        BEGIN
-            UPDATE Diem
-            SET 
-                DiemChuyenCan = ISNULL(@DiemChuyenCan, DiemChuyenCan),
-                DiemGiuaKy = ISNULL(@DiemGiuaKy, DiemGiuaKy),
-                DiemCuoiKy = ISNULL(@DiemCuoiKy, DiemCuoiKy)
-            WHERE MaDK = @MaDK;
-        END
-        ELSE
-        BEGIN
-            INSERT INTO Diem (MaDK, DiemChuyenCan, DiemGiuaKy, DiemCuoiKy, TrangThaiDiem)
-            VALUES (@MaDK, @DiemChuyenCan, @DiemGiuaKy, @DiemCuoiKy, N'Đang nhập');
-        END
+        UPDATE SinhVien
+        SET TinhTrang = @TinhTrangMoi
+        WHERE MaSV = @MaSV;
 
         COMMIT TRANSACTION;
-        PRINT N'Nhập điểm thành công!';
+        SET @ResultCode = 1;
     END TRY
     BEGIN CATCH
-        ROLLBACK;
-        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@ErrMsg, 16, 1);
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        DECLARE @Err1 NVARCHAR(500) = ERROR_MESSAGE();
+        RAISERROR(@Err1, 16, 1);
     END CATCH
 END;
 GO
 
-create PROCEDURE sp_SuaDiem
-    @MaDiem INT,
-    @LoaiDiem NVARCHAR(10),
-    @DiemMoi FLOAT,
-    @NguoiSua NVARCHAR(100)
+-- =====================================================
+-- SV06: sp_LayChiTietSinhVien
+-- Mục đích: Trả về 2 result set:
+--   1. Hồ sơ đầy đủ sinh viên (join LopSinhHoat, Nganh, Khoa, KhoaHoc, GiangVien)
+--   2. Lịch sử chuyển lớp (LichSuChuyenLop) DESC
+-- =====================================================
+GO
+CREATE OR ALTER PROCEDURE sp_LayChiTietSinhVien
+    @MaSV VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
-    BEGIN TRY
-        BEGIN TRANSACTION;
 
-        -- Kiểm tra MaDiem tồn tại
-        IF NOT EXISTS (SELECT 1 FROM Diem WHERE MaDiem = @MaDiem)
-        BEGIN
-            RAISERROR(N'MaDiem %d không tồn tại trong bảng Diem!', 16, 1, @MaDiem);
-            ROLLBACK;
-            RETURN;
-        END
-
-        DECLARE @TrangThai NVARCHAR(20);
-        SELECT @TrangThai = TrangThaiDiem FROM Diem WHERE MaDiem = @MaDiem;
-        IF @TrangThai = N'Đã khóa'
-        BEGIN
-            RAISERROR(N'Điểm đã bị khóa, không thể sửa!', 16, 1);
-            ROLLBACK;
-            RETURN;
-        END
-
-        DECLARE @DiemCu FLOAT;
-        SELECT @DiemCu = CASE @LoaiDiem
-            WHEN 'cc' THEN DiemChuyenCan
-            WHEN 'gk' THEN DiemGiuaKy
-            WHEN 'ck' THEN DiemCuoiKy
-            ELSE NULL
-        END
-        FROM Diem WHERE MaDiem = @MaDiem;
-
-        IF @DiemCu IS NULL AND @LoaiDiem NOT IN ('cc','gk','ck')
-        BEGIN
-            RAISERROR(N'Loại điểm không hợp lệ!', 16, 1);
-            ROLLBACK;
-            RETURN;
-        END
-
-        -- Cập nhật điểm
-        UPDATE Diem
-        SET 
-            DiemChuyenCan = CASE WHEN @LoaiDiem = 'cc' THEN @DiemMoi ELSE DiemChuyenCan END,
-            DiemGiuaKy = CASE WHEN @LoaiDiem = 'gk' THEN @DiemMoi ELSE DiemGiuaKy END,
-            DiemCuoiKy = CASE WHEN @LoaiDiem = 'ck' THEN @DiemMoi ELSE DiemCuoiKy END
-        WHERE MaDiem = @MaDiem;
-
-        -- Ghi lịch sử (chỉ khi UPDATE thành công)
-        INSERT INTO LichSuSuaDiem (MaDiem, LoaiDiem, DiemCu, DiemMoi, NguoiSua)
-        VALUES (@MaDiem, @LoaiDiem, @DiemCu, @DiemMoi, @NguoiSua);
-
-        COMMIT TRANSACTION;
-        PRINT N'Sửa điểm thành công!';
-    END TRY
-    BEGIN CATCH
-        ROLLBACK;
-        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@ErrMsg, 16, 1);
-    END CATCH
-END;
-GO
-
-CREATE PROCEDURE sp_XacNhanDiem
-    @MaLHP NVARCHAR(20),
-    @MaGV NVARCHAR(20) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    BEGIN TRY
-        BEGIN TRANSACTION;
-
-        IF NOT EXISTS (SELECT 1 FROM LopHocPhan WHERE MaLHP = @MaLHP)
-        BEGIN
-            RAISERROR(N'Lớp học phần không tồn tại!', 16, 1);
-            ROLLBACK;
-            RETURN;
-        END
-
-        IF EXISTS (
-            SELECT 1
-            FROM Diem d
-            JOIN DangKy dk ON d.MaDK = dk.MaDK
-            WHERE dk.MaLHP = @MaLHP
-              AND (d.DiemChuyenCan IS NULL OR d.DiemGiuaKy IS NULL OR d.DiemCuoiKy IS NULL)
-        )
-        BEGIN
-            RAISERROR(N'Không thể khóa điểm vì còn sinh viên thiếu điểm thành phần!', 16, 1);
-            ROLLBACK;
-            RETURN;
-        END
-
-        UPDATE d
-        SET TrangThaiDiem = N'Đã khóa',
-            NgayXacNhan = GETDATE()
-        FROM Diem d
-        JOIN DangKy dk ON d.MaDK = dk.MaDK
-        WHERE dk.MaLHP = @MaLHP;
-
-        COMMIT TRANSACTION;
-        PRINT N'Đã khóa điểm cho lớp ' + @MaLHP;
-    END TRY
-    BEGIN CATCH
-        ROLLBACK;
-        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@ErrMsg, 16, 1);
-    END CATCH
-END;
-GO
-
-PRINT N'Đã tạo xong toàn bộ đối tượng trong database QLDiem.';
-
---Bao cao va thong ke
-
--- =====================================================
--- VIEW 1: vw_ThongKeSinhVienTheoKhoa
--- =====================================================
-USE QuanLySinhVien;
-GO
-
-CREATE OR ALTER VIEW vw_ThongKeSinhVienTheoKhoa
-AS
-SELECT 
-    k.MaKhoa,
-    k.TenKhoa,
-    n.MaNganh,
-    n.TenNganh,
-    kh.MaKhoaHoc,
-    kh.TenKhoaHoc,
-    COUNT(sv.MaSV) AS SoLuongSinhVien,
-    SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS SoLuongDangHoc,
-    SUM(CASE WHEN sv.TinhTrang = N'Tốt nghiệp' THEN 1 ELSE 0 END) AS SoLuongTotNghiep,
-    SUM(CASE WHEN sv.TinhTrang = N'Nghỉ học' THEN 1 ELSE 0 END) AS SoLuongNghiHoc,
-    SUM(CASE WHEN sv.TinhTrang = N'Thôi học' THEN 1 ELSE 0 END) AS SoLuongThoiHoc
-FROM SinhVien sv
-JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
-JOIN Nganh n ON l.MaNganh = n.MaNganh
-JOIN Khoa k ON n.MaKhoa = k.MaKhoa
-JOIN KhoaHoc kh ON l.MaKhoaHoc = kh.MaKhoaHoc
-GROUP BY k.MaKhoa, k.TenKhoa, n.MaNganh, n.TenNganh, kh.MaKhoaHoc, kh.TenKhoaHoc;
-GO
-
--- =====================================================
--- VIEW 2: vw_KetQuaHocTapTheoKy
--- =====================================================
-CREATE OR ALTER VIEW vw_KetQuaHocTapTheoKy
-AS
-SELECT 
-    hk.MaHocKy,
-    hk.TenHocKy,
-    hk.NamHoc,
-    d.XepLoai,
-    COUNT(*) AS SoLuong,
-    AVG(d.DiemTongKet) AS DiemTrungBinh
-FROM Diem d
-JOIN DangKy dk ON d.MaDK = dk.MaDK
-JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
-JOIN HocKy hk ON lhp.MaHocKy = hk.MaHocKy
-WHERE d.XepLoai IS NOT NULL 
-  AND d.TrangThaiDiem = N'Đã khóa'
-GROUP BY hk.MaHocKy, hk.TenHocKy, hk.NamHoc, d.XepLoai;
-GO
-
--- =====================================================
--- VIEW 3: vw_ThongKeSVTheoLop
--- =====================================================
-CREATE OR ALTER VIEW vw_ThongKeSVTheoLop
-AS
-SELECT 
-    l.MaLopSH,
-    l.TenLop,
-    n.TenNganh,
-    k.TenKhoa,
-    kh.TenKhoaHoc,
-    COUNT(sv.MaSV) AS SiSo,
-    SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS SoLuongDangHoc,
-    SUM(CASE WHEN sv.GioiTinh = 1 THEN 1 ELSE 0 END) AS SoLuongNam,
-    SUM(CASE WHEN sv.GioiTinh = 0 THEN 1 ELSE 0 END) AS SoLuongNu
-FROM LopSinhHoat l
-LEFT JOIN SinhVien sv ON l.MaLopSH = sv.MaLopSH
-JOIN Nganh n ON l.MaNganh = n.MaNganh
-JOIN Khoa k ON n.MaKhoa = k.MaKhoa
-JOIN KhoaHoc kh ON l.MaKhoaHoc = kh.MaKhoaHoc
-GROUP BY l.MaLopSH, l.TenLop, n.TenNganh, k.TenKhoa, kh.TenKhoaHoc;
-GO
-
--- =====================================================
--- VIEW 4: vw_DiemTrungBinhSinhVien
--- =====================================================
-CREATE OR ALTER VIEW vw_DiemTrungBinhSinhVien
-AS
-SELECT 
-    sv.MaSV,
-    sv.HoTen,
-    l.TenLop,
-    n.TenNganh,
-    AVG(d.DiemTongKet) AS DiemTrungBinh,
-    MAX(CASE WHEN d.XepLoai IN (N'Xuất sắc', N'Giỏi') THEN 1 ELSE 0 END) AS DaDatGioi
-FROM SinhVien sv
-JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
-JOIN Nganh n ON l.MaNganh = n.MaNganh
-LEFT JOIN DangKy dk ON sv.MaSV = dk.MaSV
-LEFT JOIN Diem d ON dk.MaDK = d.MaDK AND d.TrangThaiDiem = N'Đã khóa'
-GROUP BY sv.MaSV, sv.HoTen, l.TenLop, n.TenNganh;
-GO
-
--- Kiem tra view (bo comment de test): SELECT * FROM vw_KetQuaHocTapTheoKy
-GO
--- =====================================================
--- FUNCTION 1: fn_ThongKeSVTheoKhoa
--- =====================================================
-CREATE OR ALTER FUNCTION fn_ThongKeSVTheoKhoa (@maKhoa VARCHAR(10))
-RETURNS TABLE
-AS
-RETURN
-(
-    SELECT 
-        n.MaNganh,
-        n.TenNganh,
-        COUNT(sv.MaSV) AS TongSoSV,
-        SUM(CASE WHEN sv.TinhTrang = N'Đang học' THEN 1 ELSE 0 END) AS DangHoc,
-        SUM(CASE WHEN sv.TinhTrang = N'Tốt nghiệp' THEN 1 ELSE 0 END) AS TotNghiep,
-        SUM(CASE WHEN sv.TinhTrang IN (N'Nghỉ học', N'Thôi học') THEN 1 ELSE 0 END) AS NgungHoc
-    FROM Nganh n
-    LEFT JOIN LopSinhHoat l ON n.MaNganh = l.MaNganh
-    LEFT JOIN SinhVien sv ON l.MaLopSH = sv.MaLopSH
-    WHERE n.MaKhoa = @maKhoa
-    GROUP BY n.MaNganh, n.TenNganh
-);
-GO
-
--- =====================================================
--- FUNCTION 2: fn_TyLeXepLoai
--- =====================================================
-CREATE OR ALTER FUNCTION fn_TyLeXepLoai (@maHocKy VARCHAR(10))
-RETURNS TABLE
-AS
-RETURN
-(
-    WITH ThongKe AS (
-        SELECT 
-            XepLoai,
-            COUNT(*) AS SoLuong
-        FROM Diem d
-        JOIN DangKy dk ON d.MaDK = dk.MaDK
-        JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
-        WHERE lhp.MaHocKy = @maHocKy
-          AND d.XepLoai IS NOT NULL
-          AND d.TrangThaiDiem = N'Đã khóa'
-        GROUP BY XepLoai
-    )
-    SELECT 
-        XepLoai,
-        SoLuong,
-        CAST(SoLuong * 100.0 / SUM(SoLuong) OVER() AS DECIMAL(5,2)) AS TyLePhanTram
-    FROM ThongKe
-);
-GO
-
--- Kiem tra function (bo comment de test): SELECT * FROM fn_ThongKeSVTheoKhoa('CNTT')
-GO
--- =====================================================
--- TRIGGER 1: trg_CapNhatHocPhi (ĐÃ SỬA HOÀN TOÀN)
--- =====================================================
-CREATE OR ALTER TRIGGER trg_CapNhatHocPhi
-ON DangKy
-AFTER INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @DonGiaTinChi FLOAT = 350000;
-    
-    -- Cập nhật học phí cho các bản ghi đã tồn tại
-    UPDATE hp
-    SET 
-        hp.SoTinChiDangKy = ISNULL((
-            SELECT SUM(m.SoTinChi)
-            FROM DangKy dk2
-            INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
-            INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
-            WHERE dk2.MaSV = hp.MaSV 
-              AND lhp2.MaHocKy = hp.MaHocKy
-              AND dk2.TrangThai = N'Đã đăng ký'
-        ), 0),
-        hp.TongHocPhi = ISNULL((
-            SELECT SUM(m.SoTinChi) * @DonGiaTinChi
-            FROM DangKy dk2
-            INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
-            INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
-            WHERE dk2.MaSV = hp.MaSV 
-              AND lhp2.MaHocKy = hp.MaHocKy
-              AND dk2.TrangThai = N'Đã đăng ký'
-        ), 0)
-    FROM HocPhi hp
-    INNER JOIN inserted i ON hp.MaSV = i.MaSV
-    INNER JOIN LopHocPhan lhp ON i.MaLHP = lhp.MaLHP
-    WHERE hp.MaHocKy = lhp.MaHocKy;
-    
-    -- Thêm mới học phí cho những sinh viên chưa có trong học kỳ này
-    -- SỬ DỤNG NOT EXISTS THAY VÌ IS NULL ĐỂ TRÁNH LỖI CỘT
-    INSERT INTO HocPhi (MaSV, MaHocKy, SoTinChiDangKy, TongHocPhi, DaDong, TrangThai)
-    SELECT 
-        i.MaSV,
-        lhp.MaHocKy,
-        ISNULL((
-            SELECT SUM(m.SoTinChi)
-            FROM MonHoc m
-            WHERE m.MaMon = lhp.MaMon
-        ), 0),
-        ISNULL((
-            SELECT SUM(m.SoTinChi) * @DonGiaTinChi
-            FROM MonHoc m
-            WHERE m.MaMon = lhp.MaMon
-        ), 0),
-        0,
-        N'Chưa đóng'
-    FROM inserted i
-    INNER JOIN LopHocPhan lhp ON i.MaLHP = lhp.MaLHP
-    WHERE NOT EXISTS (
-        SELECT 1 
-        FROM HocPhi hp 
-        WHERE hp.MaSV = i.MaSV 
-          AND hp.MaHocKy = lhp.MaHocKy
-    );
-END
-GO
-
-PRINT N'Đã tạo trigger trg_CapNhatHocPhi';
-GO
-
--- =====================================================
--- TRIGGER 2: trg_GiamHocPhiKhiHuy 
--- =====================================================
-CREATE OR ALTER TRIGGER trg_GiamHocPhiKhiHuy
-ON DangKy
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @DonGiaTinChi FLOAT = 350000;
-    
-    IF UPDATE(TrangThai)
-    BEGIN
-        UPDATE hp
-        SET 
-            hp.SoTinChiDangKy = ISNULL((
-                SELECT SUM(m.SoTinChi)
-                FROM DangKy dk2
-                INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
-                INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
-                WHERE dk2.MaSV = hp.MaSV 
-                  AND lhp2.MaHocKy = hp.MaHocKy
-                  AND dk2.TrangThai = N'Đã đăng ký'
-            ), 0),
-            hp.TongHocPhi = ISNULL((
-                SELECT SUM(m.SoTinChi) * @DonGiaTinChi
-                FROM DangKy dk2
-                INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
-                INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
-                WHERE dk2.MaSV = hp.MaSV 
-                  AND lhp2.MaHocKy = hp.MaHocKy
-                  AND dk2.TrangThai = N'Đã đăng ký'
-            ), 0),
-            hp.TrangThai = CASE 
-                WHEN hp.DaDong >= ISNULL((
-                    SELECT SUM(m.SoTinChi) * @DonGiaTinChi
-                    FROM DangKy dk2
-                    INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
-                    INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
-                    WHERE dk2.MaSV = hp.MaSV 
-                      AND lhp2.MaHocKy = hp.MaHocKy
-                      AND dk2.TrangThai = N'Đã đăng ký'
-                ), 0) THEN N'Đã đóng'
-                WHEN hp.DaDong > 0 THEN N'Đóng một phần'
-                ELSE N'Chưa đóng'
-            END
-        FROM HocPhi hp
-        INNER JOIN deleted d ON hp.MaSV = d.MaSV
-        INNER JOIN LopHocPhan lhp ON d.MaLHP = lhp.MaLHP
-        WHERE hp.MaHocKy = lhp.MaHocKy
-          AND d.TrangThai = N'Đã đăng ký'
-          AND EXISTS (
-              SELECT 1 
-              FROM inserted i 
-              WHERE i.MaDK = d.MaDK 
-                AND i.TrangThai = N'Đã hủy'
-          );
-    END
-END
-GO
-
-PRINT N'Đã tạo trigger trg_GiamHocPhiKhiHuy';
-GO
-
--- Kiểm tra bảng HocPhi có tồn tại không
-IF OBJECT_ID('HocPhi', 'U') IS NULL
-BEGIN
-    PRINT N'Đang tạo bảng HocPhi...';
-    
-    CREATE TABLE HocPhi (
-        MaHocPhi       INT IDENTITY PRIMARY KEY,
-        MaSV           VARCHAR(10)  NOT NULL,
-        MaHocKy        VARCHAR(10)  NOT NULL,
-        SoTinChiDangKy INT          NOT NULL DEFAULT 0,
-        TongHocPhi     FLOAT        NOT NULL DEFAULT 0,
-        DaDong         FLOAT        DEFAULT 0,
-        TrangThai      NVARCHAR(20) DEFAULT N'Chưa đóng',
-        NgayDong       DATETIME     NULL,
-        FOREIGN KEY (MaSV)    REFERENCES SinhVien(MaSV),
-        FOREIGN KEY (MaHocKy) REFERENCES HocKy(MaHocKy)
-    );
-    
-    PRINT N'Đã tạo bảng HocPhi thành công!';
-END
-ELSE
-BEGIN
-    PRINT N'Bảng HocPhi đã tồn tại, kiểm tra cấu trúc...';
-    
-    -- Kiểm tra cấu trúc bảng
-    SELECT COLUMN_NAME, DATA_TYPE 
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = 'HocPhi'
-    ORDER BY ORDINAL_POSITION;
-END
-GO
-
--- PROCEDURE: sp_ThongKeTongQuan
--- Mục đích: Lấy 4 số liệu tổng quan cho Dashboard
--- Sử dụng cho: BC08 - Dashboard tổng quan
--- =====================================================
-CREATE OR ALTER PROCEDURE sp_ThongKeTongQuan
-    @TongSinhVien INT OUTPUT,
-    @TongGiangVien INT OUTPUT,
-    @LopHocPhanDangMo INT OUTPUT,
-    @TongMonHoc INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- Tổng số sinh viên đang học
-    SELECT @TongSinhVien = COUNT(*)
-    FROM SinhVien
-    WHERE TinhTrang = N'Đang học';
-    
-    -- Tổng số giảng viên
-    SELECT @TongGiangVien = COUNT(*)
-    FROM GiangVien;
-    
-    -- Số lớp học phần đang mở trong học kỳ hiện tại
-    SELECT @LopHocPhanDangMo = COUNT(*)
-    FROM LopHocPhan
-    WHERE TrangThai = N'Đang mở';
-    
-    -- Tổng số môn học
-    SELECT @TongMonHoc = COUNT(*)
-    FROM MonHoc;
-    
-    -- Trả về kết quả dạng bảng (phục vụ hiển thị)
-    SELECT 
-        @TongSinhVien AS TongSinhVien,
-        @TongGiangVien AS TongGiangVien,
-        @LopHocPhanDangMo AS LopHocPhanDangMo,
-        @TongMonHoc AS TongMonHoc;
-END
-GO
-
--- Kiem tra procedure (bo comment de test):
--- DECLARE @sv INT, @gv INT, @lhp INT, @mh INT
--- EXEC sp_ThongKeTongQuan @sv OUTPUT, @gv OUTPUT, @lhp OUTPUT, @mh OUTPUT
-
--- =====================================================
--- PROCEDURE: sp_BaoCaoHocPhi
--- Tham số: @maHocKy - Mã học kỳ cần báo cáo
--- Mục đích: Báo cáo chi tiết học phí theo học kỳ
--- Sử dụng cho: BC06 - Báo cáo học phí, xuất Excel
--- =====================================================
-GO
-CREATE OR ALTER PROCEDURE sp_BaoCaoHocPhi
-    @MaHocKy VARCHAR(10)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    SELECT 
+    -- Result set 1: Thông tin cá nhân + lớp + khoa + ngành + khóa + GVCN
+    SELECT
         sv.MaSV,
         sv.HoTen,
-        l.TenLop,
-        n.TenNganh,
+        sv.NgaySinh,
+        CASE sv.GioiTinh
+            WHEN 1 THEN N'Nam'
+            WHEN 0 THEN N'Nữ'
+            ELSE N'Chưa cập nhật'
+        END AS GioiTinhHienThi,
+        sv.GioiTinh,
+        sv.DiaChi,
+        sv.AnhDaiDien,
+        sv.TinhTrang,
+        sv.MaLopSH,
+        lsh.TenLop,
+        ng.MaNganh,
+        ng.TenNganh,
+        k.MaKhoa,
         k.TenKhoa,
-        hp.SoTinChiDangKy,
-        hp.TongHocPhi,
-        hp.DaDong,
-        (hp.TongHocPhi - hp.DaDong) AS ConLai,
-        hp.TrangThai,
-        CASE 
-            WHEN hp.DaDong >= hp.TongHocPhi THEN N'Hoàn thành'
-            WHEN hp.DaDong > 0 THEN N'Còn nợ'
-            ELSE N'Chưa đóng'
-        END AS TinhTrangThanhToan,
-        hp.NgayDong
-    FROM HocPhi hp
-    JOIN SinhVien sv ON hp.MaSV = sv.MaSV
-    JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
-    JOIN Nganh n ON l.MaNganh = n.MaNganh
-    JOIN Khoa k ON n.MaKhoa = k.MaKhoa
-    WHERE hp.MaHocKy = @MaHocKy
-    ORDER BY k.TenKhoa, n.TenNganh, sv.HoTen;
-    
-    -- Tổng hợp chung
-    SELECT 
-        COUNT(*) AS TongSinhVien,
-        SUM(hp.TongHocPhi) AS TongHocPhi,
-        SUM(hp.DaDong) AS TongDaThu,
-        SUM(hp.TongHocPhi - hp.DaDong) AS TongConNo,
-        CAST(SUM(hp.DaDong) * 100.0 / NULLIF(SUM(hp.TongHocPhi), 0) AS DECIMAL(5,2)) AS TyLeThu
-    FROM HocPhi hp
-    WHERE hp.MaHocKy = @MaHocKy;
-END
-GO
+        kh.MaKhoaHoc,
+        kh.TenKhoaHoc,
+        lsh.MaGVCN,
+        ISNULL(gv.HoTen, N'Chưa có') AS TenGVCN,
+        gv.Email       AS EmailGVCN,
+        gv.SoDienThoai AS SdtGVCN
+    FROM SinhVien sv
+    JOIN LopSinhHoat lsh ON sv.MaLopSH    = lsh.MaLopSH
+    JOIN Nganh       ng  ON lsh.MaNganh   = ng.MaNganh
+    JOIN Khoa        k   ON ng.MaKhoa     = k.MaKhoa
+    JOIN KhoaHoc     kh  ON lsh.MaKhoaHoc = kh.MaKhoaHoc
+    LEFT JOIN GiangVien gv ON lsh.MaGVCN  = gv.MaGV
+    WHERE sv.MaSV = @MaSV;
 
--- Kiem tra procedure (bo comment de test): EXEC sp_BaoCaoHocPhi 'HK1_2324'
-GO
--- vw_ThongKeSVTheoLop và vw_DiemTrungBinhSinhVien đã được tạo bên trên
--- (dùng CREATE OR ALTER VIEW), không cần khai báo lại
-------
-------
-USE QuanLySinhVien;
-GO
-
-USE QuanLySinhVien;
-GO
-
--- Kiểm tra và thêm cột DiaChi nếu chưa có
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
-               WHERE TABLE_NAME = 'SinhVien' AND COLUMN_NAME = 'DiaChi')
-BEGIN
-    ALTER TABLE SinhVien ADD DiaChi NVARCHAR(200) NULL;
-    PRINT N'Đã thêm cột DiaChi vào bảng SinhVien';
-END
-ELSE
-    PRINT N'Cột DiaChi đã tồn tại';
+    -- Result set 2: Lịch sử chuyển lớp
+    SELECT
+        ls.MaLS,
+        ls.LopCu,
+        ls.LopMoi,
+        ls.LyDo,
+        ls.NguoiDuyet,
+        ls.NgayChyen
+    FROM LichSuChuyenLop ls
+    WHERE ls.MaSV = @MaSV
+    ORDER BY ls.NgayChyen DESC;
+END;
 GO
 
 -- =====================================================
--- PROCEDURE: sp_TimKiemSinhVienNangCao
--- Mục đích: Tìm kiếm sinh viên với nhiều tiêu chí lọc
--- Sử dụng cho: BC03 - Tìm kiếm nâng cao
+-- SV07: sp_ChuyenLop_CoLog
+-- Mục đích: Chuyển lớp sinh viên + ghi đầy đủ LyDo, NguoiDuyet vào LichSuChuyenLop
+-- Đặt tên mới để không xung đột với sp_ChuyenLop hiện có
+-- ResultCode: 1=OK, -1=SV không tồn tại hoặc không đang học, -2=lớp mới không tồn tại
 -- =====================================================
-CREATE OR ALTER PROCEDURE sp_TimKiemSinhVienNangCao
-    @HoTen NVARCHAR(100) = NULL,
-    @MaSV VARCHAR(10) = NULL,
-    @MaLopSH VARCHAR(15) = NULL,
-    @MaKhoa VARCHAR(10) = NULL,
-    @MaNganh VARCHAR(10) = NULL,
-    @TinhTrang NVARCHAR(20) = NULL,
-    @DiemTu FLOAT = NULL,
-    @DiemDen FLOAT = NULL,
-    @HocKy VARCHAR(10) = NULL
+GO
+CREATE OR ALTER PROCEDURE sp_ChuyenLop_CoLog
+    @MaSV        VARCHAR(10),
+    @MaLopMoi    VARCHAR(15),
+    @LyDo        NVARCHAR(200) = NULL,
+    @NguoiDuyet  NVARCHAR(100) = NULL,
+    @ResultCode  INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT DISTINCT
+
+    -- Kiểm tra sinh viên tồn tại và đang học
+    IF NOT EXISTS (
+        SELECT 1 FROM SinhVien
+        WHERE MaSV = @MaSV
+          AND TinhTrang = N'Đang học'
+    )
+    BEGIN
+        SET @ResultCode = -1;
+        RETURN;
+    END
+
+    -- Kiểm tra lớp mới tồn tại
+    IF NOT EXISTS (SELECT 1 FROM LopSinhHoat WHERE MaLopSH = @MaLopMoi)
+    BEGIN
+        SET @ResultCode = -2;
+        RETURN;
+    END
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Lấy lớp hiện tại
+        DECLARE @LopCu VARCHAR(15);
+        SELECT @LopCu = MaLopSH FROM SinhVien WHERE MaSV = @MaSV;
+
+        -- Cập nhật lớp cho sinh viên
+        UPDATE SinhVien
+        SET MaLopSH = @MaLopMoi
+        WHERE MaSV = @MaSV;
+
+        -- Ghi lịch sử chuyển lớp đầy đủ
+        INSERT INTO LichSuChuyenLop (MaSV, LopCu, LopMoi, LyDo, NguoiDuyet, NgayChyen)
+        VALUES (@MaSV, @LopCu, @MaLopMoi, @LyDo, @NguoiDuyet, GETDATE());
+
+        COMMIT TRANSACTION;
+        SET @ResultCode = 1;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        DECLARE @Err2 NVARCHAR(500) = ERROR_MESSAGE();
+        RAISERROR(@Err2, 16, 1);
+    END CATCH
+END;
+GO
+
+-- sp_TimKiemSinhVien
+CREATE OR ALTER PROCEDURE sp_TimKiemSinhVien
+    @Keyword   NVARCHAR(100) = NULL,
+    @MaLopSH   VARCHAR(15)   = NULL,
+    @MaKhoa    VARCHAR(10)   = NULL,
+    @MaNganh   VARCHAR(10)   = NULL,
+    @TinhTrang NVARCHAR(20)  = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
         sv.MaSV,
         sv.HoTen,
         sv.NgaySinh,
         sv.GioiTinh,
         sv.DiaChi,
-        l.TenLop,
-        n.TenNganh,
+        sv.MaLopSH,
+        lsh.TenLop,
+        ng.MaNganh,
+        ng.TenNganh,
+        k.MaKhoa,
         k.TenKhoa,
         sv.TinhTrang,
-        AVG(d.DiemTongKet) OVER (PARTITION BY sv.MaSV) AS DiemTrungBinh
+        sv.AnhDaiDien
     FROM SinhVien sv
-    JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
-    JOIN Nganh n ON l.MaNganh = n.MaNganh
-    JOIN Khoa k ON n.MaKhoa = k.MaKhoa
-    LEFT JOIN DangKy dk ON sv.MaSV = dk.MaSV
-    LEFT JOIN Diem d ON dk.MaDK = d.MaDK AND d.TrangThaiDiem = N'Đã khóa'
-    LEFT JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
-    WHERE (@HoTen IS NULL OR sv.HoTen LIKE N'%' + @HoTen + '%')
-      AND (@MaSV IS NULL OR sv.MaSV LIKE '%' + @MaSV + '%')
-      AND (@MaLopSH IS NULL OR sv.MaLopSH = @MaLopSH)
-      AND (@MaKhoa IS NULL OR n.MaKhoa = @MaKhoa)
-      AND (@MaNganh IS NULL OR l.MaNganh = @MaNganh)
+    JOIN LopSinhHoat lsh ON sv.MaLopSH  = lsh.MaLopSH
+    JOIN Nganh       ng  ON lsh.MaNganh = ng.MaNganh
+    JOIN Khoa        k   ON ng.MaKhoa   = k.MaKhoa
+    WHERE (@Keyword   IS NULL OR sv.MaSV   LIKE N'%' + @Keyword + N'%'
+                              OR sv.HoTen  LIKE N'%' + @Keyword + N'%')
+      AND (@MaLopSH   IS NULL OR sv.MaLopSH   = @MaLopSH)
+      AND (@MaKhoa    IS NULL OR k.MaKhoa     = @MaKhoa)
+      AND (@MaNganh   IS NULL OR ng.MaNganh   = @MaNganh)
       AND (@TinhTrang IS NULL OR sv.TinhTrang = @TinhTrang)
-      AND (@DiemTu IS NULL OR d.DiemTongKet >= @DiemTu)
-      AND (@DiemDen IS NULL OR d.DiemTongKet <= @DiemDen)
-      AND (@HocKy IS NULL OR lhp.MaHocKy = @HocKy)
-    ORDER BY sv.HoTen;
-END
-GO
-
--- Kiem tra (bo comment de test): EXEC sp_TimKiemSinhVienNangCao @HoTen = N'Nguyen'
-
-
--- =====================================================
--- Dashboard tổng hợp đầy đủ (BC08)
--- =====================================================
-go
-CREATE OR ALTER PROCEDURE sp_DashboardTongHop
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- 1. Thống kê số lượng tổng quan
-    SELECT 'TongSinhVien' AS ChiTieu, COUNT(*) AS SoLuong FROM SinhVien WHERE TinhTrang = N'Đang học'
-    UNION ALL
-    SELECT 'TongGiangVien', COUNT(*) FROM GiangVien
-    UNION ALL
-    SELECT 'LopHocPhanDangMo', COUNT(*) FROM LopHocPhan WHERE TrangThai = N'Đang mở'
-    UNION ALL
-    SELECT 'TongMonHoc', COUNT(*) FROM MonHoc;
-    
-    -- 2. Thống kê sinh viên theo tình trạng
-    SELECT TinhTrang, COUNT(*) AS SoLuong 
-    FROM SinhVien 
-    GROUP BY TinhTrang;
-    
-    -- 3. Top 5 môn học có tỷ lệ đậu cao nhất
-    SELECT TOP 5 
-        m.TenMon,
-        COUNT(CASE WHEN d.DiemTongKet >= 5 THEN 1 END) * 100.0 / COUNT(*) AS TyLeDau
-    FROM MonHoc m
-    JOIN LopHocPhan lhp ON m.MaMon = lhp.MaMon
-    JOIN DangKy dk ON lhp.MaLHP = dk.MaLHP
-    JOIN Diem d ON dk.MaDK = d.MaDK
-    WHERE d.TrangThaiDiem = N'Đã khóa'
-    GROUP BY m.TenMon
-    ORDER BY TyLeDau DESC;
-    
-    -- 4. Thống kê học phí theo học kỳ
-    SELECT 
-        hk.TenHocKy,
-        hk.NamHoc,
-        SUM(hp.TongHocPhi) AS TongHocPhi,
-        SUM(hp.DaDong) AS DaThu,
-        SUM(hp.TongHocPhi - hp.DaDong) AS ConNo
-    FROM HocPhi hp
-    JOIN HocKy hk ON hp.MaHocKy = hk.MaHocKy
-    GROUP BY hk.TenHocKy, hk.NamHoc
-    ORDER BY hk.NamHoc DESC, hk.TenHocKy;
+    ORDER BY sv.MaSV;
 END
 GO
 
@@ -3871,6 +3421,85 @@ BEGIN
 END
 GO
 
+CREATE PROCEDURE sp_DangKyHocPhan
+    @maSV VARCHAR(10),
+    @maLHP VARCHAR(20)
+AS 
+BEGIN
+    SET NOCOUNT ON;
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; 
+
+    BEGIN TRY
+        BEGIN TRAN;
+
+        IF dbo.fn_KiemTraTrungLich(@maSV, @maLHP) = 1
+        BEGIN
+            RAISERROR(N'Bạn bị trùng lịch học với một môn khác đã đăng ký!', 16, 1);
+        END
+
+        DECLARE @maHocKy VARCHAR(10), @soTinToiDa INT, @soTinLHP INT;
+        
+        SELECT @maHocKy = MaHocKy FROM LopHocPhan WHERE MaLHP = @maLHP;
+        SELECT @soTinToiDa = SoTinToiDa FROM HocKy WHERE MaHocKy = @maHocKy;
+        
+        SELECT @soTinLHP = m.SoTinChi 
+        FROM MonHoc m, LopHocPhan lhp 
+        WHERE m.MaMon = lhp.MaMon 
+          AND lhp.MaLHP = @maLHP;
+
+        IF (dbo.fn_TongTinChiDangKy(@maSV, @maHocKy) + @soTinLHP) > @soTinToiDa
+        BEGIN
+            RAISERROR(N'Vượt quá số tín chỉ tối đa được phép trong học kỳ!', 16, 1);
+        END
+
+        INSERT INTO DangKy (MaSV, MaLHP, TrangThai)
+        VALUES (@maSV, @maLHP, N'Đã đăng ký');
+
+        COMMIT TRAN;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
+    END CATCH
+END;
+GO
+
+CREATE PROCEDURE sp_HuyDangKy
+    @maSV VARCHAR(10),
+    @maLHP VARCHAR(20)
+AS 
+BEGIN
+    SET NOCOUNT ON;
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+    BEGIN TRY
+        BEGIN TRAN;
+
+        IF EXISTS (
+            SELECT 1 FROM DangKy WITH (UPDLOCK) 
+            WHERE MaSV = @maSV AND MaLHP = @maLHP AND TrangThai = N'Đã đăng ký'
+        )
+        BEGIN
+            UPDATE DangKy 
+            SET TrangThai = N'Đã hủy' 
+            WHERE MaSV = @maSV AND MaLHP = @maLHP;
+        END
+        ELSE 
+        BEGIN
+            RAISERROR(N'Học phần này chưa được đăng ký hoặc đã bị hủy trước đó!', 16, 1);
+        END
+
+        COMMIT TRAN;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
+    END CATCH
+END;
+GO
+
 -- sp_LayDanhSachDangKy
 CREATE OR ALTER PROCEDURE sp_LayDanhSachDangKy
     @Keyword NVARCHAR(100) = NULL
@@ -3901,6 +3530,166 @@ BEGIN
        OR mh.TenMon      LIKE N'%' + @Keyword + N'%'
     ORDER BY dk.NgayDangKy DESC;
 END
+GO
+
+-- TẠO STORED PROCEDURE
+CREATE PROCEDURE sp_NhapDiem
+    @MaDK INT,
+    @DiemChuyenCan FLOAT = NULL,
+    @DiemGiuaKy FLOAT = NULL,
+    @DiemCuoiKy FLOAT = NULL,
+    @NguoiNhap NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        IF NOT EXISTS (SELECT 1 FROM DangKy WHERE MaDK = @MaDK)
+        BEGIN
+            RAISERROR(N'Mã đăng ký không tồn tại!', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        IF EXISTS (SELECT 1 FROM Diem WHERE MaDK = @MaDK)
+        BEGIN
+            UPDATE Diem
+            SET 
+                DiemChuyenCan = ISNULL(@DiemChuyenCan, DiemChuyenCan),
+                DiemGiuaKy = ISNULL(@DiemGiuaKy, DiemGiuaKy),
+                DiemCuoiKy = ISNULL(@DiemCuoiKy, DiemCuoiKy)
+            WHERE MaDK = @MaDK;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO Diem (MaDK, DiemChuyenCan, DiemGiuaKy, DiemCuoiKy, TrangThaiDiem)
+            VALUES (@MaDK, @DiemChuyenCan, @DiemGiuaKy, @DiemCuoiKy, N'Đang nhập');
+        END
+
+        COMMIT TRANSACTION;
+        PRINT N'Nhập điểm thành công!';
+    END TRY
+    BEGIN CATCH
+        ROLLBACK;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
+    END CATCH
+END;
+GO
+
+create PROCEDURE sp_SuaDiem
+    @MaDiem INT,
+    @LoaiDiem NVARCHAR(10),
+    @DiemMoi FLOAT,
+    @NguoiSua NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Kiểm tra MaDiem tồn tại
+        IF NOT EXISTS (SELECT 1 FROM Diem WHERE MaDiem = @MaDiem)
+        BEGIN
+            RAISERROR(N'MaDiem %d không tồn tại trong bảng Diem!', 16, 1, @MaDiem);
+            ROLLBACK;
+            RETURN;
+        END
+
+        DECLARE @TrangThai NVARCHAR(20);
+        SELECT @TrangThai = TrangThaiDiem FROM Diem WHERE MaDiem = @MaDiem;
+        IF @TrangThai = N'Đã khóa'
+        BEGIN
+            RAISERROR(N'Điểm đã bị khóa, không thể sửa!', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        DECLARE @DiemCu FLOAT;
+        SELECT @DiemCu = CASE @LoaiDiem
+            WHEN 'cc' THEN DiemChuyenCan
+            WHEN 'gk' THEN DiemGiuaKy
+            WHEN 'ck' THEN DiemCuoiKy
+            ELSE NULL
+        END
+        FROM Diem WHERE MaDiem = @MaDiem;
+
+        IF @DiemCu IS NULL AND @LoaiDiem NOT IN ('cc','gk','ck')
+        BEGIN
+            RAISERROR(N'Loại điểm không hợp lệ!', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Cập nhật điểm
+        UPDATE Diem
+        SET 
+            DiemChuyenCan = CASE WHEN @LoaiDiem = 'cc' THEN @DiemMoi ELSE DiemChuyenCan END,
+            DiemGiuaKy = CASE WHEN @LoaiDiem = 'gk' THEN @DiemMoi ELSE DiemGiuaKy END,
+            DiemCuoiKy = CASE WHEN @LoaiDiem = 'ck' THEN @DiemMoi ELSE DiemCuoiKy END
+        WHERE MaDiem = @MaDiem;
+
+        -- Ghi lịch sử (chỉ khi UPDATE thành công)
+        INSERT INTO LichSuSuaDiem (MaDiem, LoaiDiem, DiemCu, DiemMoi, NguoiSua)
+        VALUES (@MaDiem, @LoaiDiem, @DiemCu, @DiemMoi, @NguoiSua);
+
+        COMMIT TRANSACTION;
+        PRINT N'Sửa điểm thành công!';
+    END TRY
+    BEGIN CATCH
+        ROLLBACK;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
+    END CATCH
+END;
+GO
+
+CREATE PROCEDURE sp_XacNhanDiem
+    @MaLHP NVARCHAR(20),
+    @MaGV NVARCHAR(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        IF NOT EXISTS (SELECT 1 FROM LopHocPhan WHERE MaLHP = @MaLHP)
+        BEGIN
+            RAISERROR(N'Lớp học phần không tồn tại!', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        IF EXISTS (
+            SELECT 1
+            FROM Diem d
+            JOIN DangKy dk ON d.MaDK = dk.MaDK
+            WHERE dk.MaLHP = @MaLHP
+              AND (d.DiemChuyenCan IS NULL OR d.DiemGiuaKy IS NULL OR d.DiemCuoiKy IS NULL)
+        )
+        BEGIN
+            RAISERROR(N'Không thể khóa điểm vì còn sinh viên thiếu điểm thành phần!', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        UPDATE d
+        SET TrangThaiDiem = N'Đã khóa',
+            NgayXacNhan = GETDATE()
+        FROM Diem d
+        JOIN DangKy dk ON d.MaDK = dk.MaDK
+        WHERE dk.MaLHP = @MaLHP;
+
+        COMMIT TRANSACTION;
+        PRINT N'Đã khóa điểm cho lớp ' + @MaLHP;
+    END TRY
+    BEGIN CATCH
+        ROLLBACK;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
+    END CATCH
+END;
 GO
 
 -- sp_LayDanhSachDiem
@@ -3938,42 +3727,467 @@ BEGIN
 END
 GO
 
--- sp_TimKiemSinhVien
-CREATE OR ALTER PROCEDURE sp_TimKiemSinhVien
-    @Keyword   NVARCHAR(100) = NULL,
-    @MaLopSH   VARCHAR(15)   = NULL,
-    @MaKhoa    VARCHAR(10)   = NULL,
-    @MaNganh   VARCHAR(10)   = NULL,
-    @TinhTrang NVARCHAR(20)  = NULL
+-- Kiem tra procedure (bo comment de test):
+-- DECLARE @sv INT, @gv INT, @lhp INT, @mh INT
+-- EXEC sp_ThongKeTongQuan @sv OUTPUT, @gv OUTPUT, @lhp OUTPUT, @mh OUTPUT
+
+-- =====================================================
+-- PROCEDURE: sp_BaoCaoHocPhi
+-- Tham số: @maHocKy - Mã học kỳ cần báo cáo
+-- Mục đích: Báo cáo chi tiết học phí theo học kỳ
+-- Sử dụng cho: BC06 - Báo cáo học phí, xuất Excel
+-- =====================================================
+GO
+
+-- PROCEDURE: sp_ThongKeTongQuan
+-- Mục đích: Lấy 4 số liệu tổng quan cho Dashboard
+-- Sử dụng cho: BC08 - Dashboard tổng quan
+-- =====================================================
+CREATE OR ALTER PROCEDURE sp_ThongKeTongQuan
+    @TongSinhVien INT OUTPUT,
+    @TongGiangVien INT OUTPUT,
+    @LopHocPhanDangMo INT OUTPUT,
+    @TongMonHoc INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT
+    
+    -- Tổng số sinh viên đang học
+    SELECT @TongSinhVien = COUNT(*)
+    FROM SinhVien
+    WHERE TinhTrang = N'Đang học';
+    
+    -- Tổng số giảng viên
+    SELECT @TongGiangVien = COUNT(*)
+    FROM GiangVien;
+    
+    -- Số lớp học phần đang mở trong học kỳ hiện tại
+    SELECT @LopHocPhanDangMo = COUNT(*)
+    FROM LopHocPhan
+    WHERE TrangThai = N'Đang mở';
+    
+    -- Tổng số môn học
+    SELECT @TongMonHoc = COUNT(*)
+    FROM MonHoc;
+    
+    -- Trả về kết quả dạng bảng (phục vụ hiển thị)
+    SELECT 
+        @TongSinhVien AS TongSinhVien,
+        @TongGiangVien AS TongGiangVien,
+        @LopHocPhanDangMo AS LopHocPhanDangMo,
+        @TongMonHoc AS TongMonHoc;
+END
+GO
+
+-- Kiem tra procedure (bo comment de test): EXEC sp_BaoCaoHocPhi 'HK1_2324'
+GO
+CREATE OR ALTER PROCEDURE sp_BaoCaoHocPhi
+    @MaHocKy VARCHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT 
+        sv.MaSV,
+        sv.HoTen,
+        l.TenLop,
+        n.TenNganh,
+        k.TenKhoa,
+        hp.SoTinChiDangKy,
+        hp.TongHocPhi,
+        hp.DaDong,
+        (hp.TongHocPhi - hp.DaDong) AS ConLai,
+        hp.TrangThai,
+        CASE 
+            WHEN hp.DaDong >= hp.TongHocPhi THEN N'Hoàn thành'
+            WHEN hp.DaDong > 0 THEN N'Còn nợ'
+            ELSE N'Chưa đóng'
+        END AS TinhTrangThanhToan,
+        hp.NgayDong
+    FROM HocPhi hp
+    JOIN SinhVien sv ON hp.MaSV = sv.MaSV
+    JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
+    JOIN Nganh n ON l.MaNganh = n.MaNganh
+    JOIN Khoa k ON n.MaKhoa = k.MaKhoa
+    WHERE hp.MaHocKy = @MaHocKy
+    ORDER BY k.TenKhoa, n.TenNganh, sv.HoTen;
+    
+    -- Tổng hợp chung
+    SELECT 
+        COUNT(*) AS TongSinhVien,
+        SUM(hp.TongHocPhi) AS TongHocPhi,
+        SUM(hp.DaDong) AS TongDaThu,
+        SUM(hp.TongHocPhi - hp.DaDong) AS TongConNo,
+        CAST(SUM(hp.DaDong) * 100.0 / NULLIF(SUM(hp.TongHocPhi), 0) AS DECIMAL(5,2)) AS TyLeThu
+    FROM HocPhi hp
+    WHERE hp.MaHocKy = @MaHocKy;
+END
+GO
+
+-- Kiem tra (bo comment de test): EXEC sp_TimKiemSinhVienNangCao @HoTen = N'Nguyen'
+
+
+-- =====================================================
+-- Dashboard tổng hợp đầy đủ (BC08)
+-- =====================================================
+go
+
+-- =====================================================
+-- PROCEDURE: sp_TimKiemSinhVienNangCao
+-- Mục đích: Tìm kiếm sinh viên với nhiều tiêu chí lọc
+-- Sử dụng cho: BC03 - Tìm kiếm nâng cao
+-- =====================================================
+CREATE OR ALTER PROCEDURE sp_TimKiemSinhVienNangCao
+    @HoTen NVARCHAR(100) = NULL,
+    @MaSV VARCHAR(10) = NULL,
+    @MaLopSH VARCHAR(15) = NULL,
+    @MaKhoa VARCHAR(10) = NULL,
+    @MaNganh VARCHAR(10) = NULL,
+    @TinhTrang NVARCHAR(20) = NULL,
+    @DiemTu FLOAT = NULL,
+    @DiemDen FLOAT = NULL,
+    @HocKy VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT DISTINCT
         sv.MaSV,
         sv.HoTen,
         sv.NgaySinh,
         sv.GioiTinh,
         sv.DiaChi,
-        sv.MaLopSH,
-        lsh.TenLop,
-        ng.MaNganh,
-        ng.TenNganh,
-        k.MaKhoa,
+        l.TenLop,
+        n.TenNganh,
         k.TenKhoa,
         sv.TinhTrang,
-        sv.AnhDaiDien
+        AVG(d.DiemTongKet) OVER (PARTITION BY sv.MaSV) AS DiemTrungBinh
     FROM SinhVien sv
-    JOIN LopSinhHoat lsh ON sv.MaLopSH  = lsh.MaLopSH
-    JOIN Nganh       ng  ON lsh.MaNganh = ng.MaNganh
-    JOIN Khoa        k   ON ng.MaKhoa   = k.MaKhoa
-    WHERE (@Keyword   IS NULL OR sv.MaSV   LIKE N'%' + @Keyword + N'%'
-                              OR sv.HoTen  LIKE N'%' + @Keyword + N'%')
-      AND (@MaLopSH   IS NULL OR sv.MaLopSH   = @MaLopSH)
-      AND (@MaKhoa    IS NULL OR k.MaKhoa     = @MaKhoa)
-      AND (@MaNganh   IS NULL OR ng.MaNganh   = @MaNganh)
+    JOIN LopSinhHoat l ON sv.MaLopSH = l.MaLopSH
+    JOIN Nganh n ON l.MaNganh = n.MaNganh
+    JOIN Khoa k ON n.MaKhoa = k.MaKhoa
+    LEFT JOIN DangKy dk ON sv.MaSV = dk.MaSV
+    LEFT JOIN Diem d ON dk.MaDK = d.MaDK AND d.TrangThaiDiem = N'Đã khóa'
+    LEFT JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
+    WHERE (@HoTen IS NULL OR sv.HoTen LIKE N'%' + @HoTen + '%')
+      AND (@MaSV IS NULL OR sv.MaSV LIKE '%' + @MaSV + '%')
+      AND (@MaLopSH IS NULL OR sv.MaLopSH = @MaLopSH)
+      AND (@MaKhoa IS NULL OR n.MaKhoa = @MaKhoa)
+      AND (@MaNganh IS NULL OR l.MaNganh = @MaNganh)
       AND (@TinhTrang IS NULL OR sv.TinhTrang = @TinhTrang)
-    ORDER BY sv.MaSV;
+      AND (@DiemTu IS NULL OR d.DiemTongKet >= @DiemTu)
+      AND (@DiemDen IS NULL OR d.DiemTongKet <= @DiemDen)
+      AND (@HocKy IS NULL OR lhp.MaHocKy = @HocKy)
+    ORDER BY sv.HoTen;
 END
+GO
+CREATE OR ALTER PROCEDURE sp_DashboardTongHop
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- 1. Thống kê số lượng tổng quan
+    SELECT 'TongSinhVien' AS ChiTieu, COUNT(*) AS SoLuong FROM SinhVien WHERE TinhTrang = N'Đang học'
+    UNION ALL
+    SELECT 'TongGiangVien', COUNT(*) FROM GiangVien
+    UNION ALL
+    SELECT 'LopHocPhanDangMo', COUNT(*) FROM LopHocPhan WHERE TrangThai = N'Đang mở'
+    UNION ALL
+    SELECT 'TongMonHoc', COUNT(*) FROM MonHoc;
+    
+    -- 2. Thống kê sinh viên theo tình trạng
+    SELECT TinhTrang, COUNT(*) AS SoLuong 
+    FROM SinhVien 
+    GROUP BY TinhTrang;
+    
+    -- 3. Top 5 môn học có tỷ lệ đậu cao nhất
+    SELECT TOP 5 
+        m.TenMon,
+        COUNT(CASE WHEN d.DiemTongKet >= 5 THEN 1 END) * 100.0 / COUNT(*) AS TyLeDau
+    FROM MonHoc m
+    JOIN LopHocPhan lhp ON m.MaMon = lhp.MaMon
+    JOIN DangKy dk ON lhp.MaLHP = dk.MaLHP
+    JOIN Diem d ON dk.MaDK = d.MaDK
+    WHERE d.TrangThaiDiem = N'Đã khóa'
+    GROUP BY m.TenMon
+    ORDER BY TyLeDau DESC;
+    
+    -- 4. Thống kê học phí theo học kỳ
+    SELECT 
+        hk.TenHocKy,
+        hk.NamHoc,
+        SUM(hp.TongHocPhi) AS TongHocPhi,
+        SUM(hp.DaDong) AS DaThu,
+        SUM(hp.TongHocPhi - hp.DaDong) AS ConNo
+    FROM HocPhi hp
+    JOIN HocKy hk ON hp.MaHocKy = hk.MaHocKy
+    GROUP BY hk.TenHocKy, hk.NamHoc
+    ORDER BY hk.NamHoc DESC, hk.TenHocKy;
+END
+GO
+
+-- =====================================================
+-- BC04: sp_LayDiemSinhVien
+-- Mục đích: Bảng điểm cá nhân của 1 sinh viên (dùng để in)
+-- @MaHocKy = NULL → trả tất cả học kỳ; khác NULL → lọc theo học kỳ
+-- Sắp xếp theo NamHoc, MaHocKy
+-- =====================================================
+GO
+CREATE OR ALTER PROCEDURE sp_LayDiemSinhVien
+    @MaSV    VARCHAR(10),
+    @MaHocKy VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        hk.MaHocKy,
+        hk.TenHocKy,
+        hk.NamHoc,
+        mh.MaMon,
+        mh.TenMon,
+        mh.SoTinChi,
+        lhp.MaLopHienThi,
+        d.DiemChuyenCan,
+        d.DiemGiuaKy,
+        d.DiemCuoiKy,
+        d.DiemTongKet,
+        d.XepLoai,
+        d.TrangThaiDiem,
+        d.NgayXacNhan
+    FROM Diem        d
+    JOIN DangKy      dk  ON d.MaDK    = dk.MaDK
+    JOIN LopHocPhan  lhp ON dk.MaLHP  = lhp.MaLHP
+    JOIN MonHoc      mh  ON lhp.MaMon = mh.MaMon
+    JOIN HocKy       hk  ON lhp.MaHocKy = hk.MaHocKy
+    WHERE dk.MaSV = @MaSV
+      AND (@MaHocKy IS NULL OR hk.MaHocKy = @MaHocKy)
+      AND dk.TrangThai = N'Đã đăng ký'
+    ORDER BY hk.NamHoc, hk.MaHocKy, mh.TenMon;
+END;
+GO
+
+CREATE TRIGGER trg_KhongChoVuotSiSo
+ON DangKy
+INSTEAD OF INSERT
+AS 
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM inserted i, LopHocPhan lhp
+        WHERE i.MaLHP = lhp.MaLHP 
+          AND lhp.SiSoHienTai >= lhp.SiSoToiDa
+    )
+    BEGIN
+        RAISERROR(N'Lớp học phần đã đạt sĩ số tối đa, không thể đăng ký!', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+
+    INSERT INTO DangKy(MaSV, MaLHP, TrangThai)
+    SELECT MaSV, MaLHP, TrangThai FROM inserted;
+END;
+GO
+
+CREATE TRIGGER trg_CapNhatSiSo
+ON DangKy
+AFTER INSERT, UPDATE
+AS 
+BEGIN
+    UPDATE LopHocPhan
+    SET SiSoHienTai = (
+        SELECT COUNT(*) 
+        FROM DangKy 
+        WHERE MaLHP = LopHocPhan.MaLHP AND TrangThai = N'Đã đăng ký'
+    )
+    WHERE MaLHP IN (
+        SELECT MaLHP FROM inserted
+        UNION
+        SELECT MaLHP FROM deleted
+    );
+END;
+GO
+
+-- TẠO TRIGGER
+CREATE OR ALTER TRIGGER trg_TinhDiemTongKet
+ON Diem
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE d
+    SET 
+        DiemTongKet = dbo.fn_DiemTongKet(i.DiemChuyenCan, i.DiemGiuaKy, i.DiemCuoiKy),
+        XepLoai = dbo.fn_XepLoai(dbo.fn_DiemTongKet(i.DiemChuyenCan, i.DiemGiuaKy, i.DiemCuoiKy))
+    FROM Diem d
+    INNER JOIN inserted i ON d.MaDiem = i.MaDiem;
+END;
+GO
+
+CREATE TRIGGER trg_KhoaDiem
+ON Diem
+INSTEAD OF UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM deleted WHERE TrangThaiDiem = N'Đã khóa')
+    BEGIN
+        RAISERROR(N'Không thể sửa điểm vì điểm đã bị khóa!', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+
+    UPDATE d
+    SET 
+        DiemChuyenCan = i.DiemChuyenCan,
+        DiemGiuaKy = i.DiemGiuaKy,
+        DiemCuoiKy = i.DiemCuoiKy,
+        TrangThaiDiem = i.TrangThaiDiem,
+        NgayXacNhan = i.NgayXacNhan
+    FROM Diem d
+    INNER JOIN inserted i ON d.MaDiem = i.MaDiem;
+END;
+GO
+-- =====================================================
+-- TRIGGER 1: trg_CapNhatHocPhi (ĐÃ SỬA HOÀN TOÀN)
+-- =====================================================
+CREATE OR ALTER TRIGGER trg_CapNhatHocPhi
+ON DangKy
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @DonGiaTinChi FLOAT = 350000;
+    
+    -- Cập nhật học phí cho các bản ghi đã tồn tại
+    UPDATE hp
+    SET 
+        hp.SoTinChiDangKy = ISNULL((
+            SELECT SUM(m.SoTinChi)
+            FROM DangKy dk2
+            INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
+            INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
+            WHERE dk2.MaSV = hp.MaSV 
+              AND lhp2.MaHocKy = hp.MaHocKy
+              AND dk2.TrangThai = N'Đã đăng ký'
+        ), 0),
+        hp.TongHocPhi = ISNULL((
+            SELECT SUM(m.SoTinChi) * @DonGiaTinChi
+            FROM DangKy dk2
+            INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
+            INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
+            WHERE dk2.MaSV = hp.MaSV 
+              AND lhp2.MaHocKy = hp.MaHocKy
+              AND dk2.TrangThai = N'Đã đăng ký'
+        ), 0)
+    FROM HocPhi hp
+    INNER JOIN inserted i ON hp.MaSV = i.MaSV
+    INNER JOIN LopHocPhan lhp ON i.MaLHP = lhp.MaLHP
+    WHERE hp.MaHocKy = lhp.MaHocKy;
+    
+    -- Thêm mới học phí cho những sinh viên chưa có trong học kỳ này
+    -- SỬ DỤNG NOT EXISTS THAY VÌ IS NULL ĐỂ TRÁNH LỖI CỘT
+    INSERT INTO HocPhi (MaSV, MaHocKy, SoTinChiDangKy, TongHocPhi, DaDong, TrangThai)
+    SELECT 
+        i.MaSV,
+        lhp.MaHocKy,
+        ISNULL((
+            SELECT SUM(m.SoTinChi)
+            FROM MonHoc m
+            WHERE m.MaMon = lhp.MaMon
+        ), 0),
+        ISNULL((
+            SELECT SUM(m.SoTinChi) * @DonGiaTinChi
+            FROM MonHoc m
+            WHERE m.MaMon = lhp.MaMon
+        ), 0),
+        0,
+        N'Chưa đóng'
+    FROM inserted i
+    INNER JOIN LopHocPhan lhp ON i.MaLHP = lhp.MaLHP
+    WHERE NOT EXISTS (
+        SELECT 1 
+        FROM HocPhi hp 
+        WHERE hp.MaSV = i.MaSV 
+          AND hp.MaHocKy = lhp.MaHocKy
+    );
+END
+GO
+
+PRINT N'Đã tạo trigger trg_CapNhatHocPhi';
+GO
+
+-- =====================================================
+-- TRIGGER 2: trg_GiamHocPhiKhiHuy 
+-- =====================================================
+CREATE OR ALTER TRIGGER trg_GiamHocPhiKhiHuy
+ON DangKy
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @DonGiaTinChi FLOAT = 350000;
+    
+    IF UPDATE(TrangThai)
+    BEGIN
+        UPDATE hp
+        SET 
+            hp.SoTinChiDangKy = ISNULL((
+                SELECT SUM(m.SoTinChi)
+                FROM DangKy dk2
+                INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
+                INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
+                WHERE dk2.MaSV = hp.MaSV 
+                  AND lhp2.MaHocKy = hp.MaHocKy
+                  AND dk2.TrangThai = N'Đã đăng ký'
+            ), 0),
+            hp.TongHocPhi = ISNULL((
+                SELECT SUM(m.SoTinChi) * @DonGiaTinChi
+                FROM DangKy dk2
+                INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
+                INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
+                WHERE dk2.MaSV = hp.MaSV 
+                  AND lhp2.MaHocKy = hp.MaHocKy
+                  AND dk2.TrangThai = N'Đã đăng ký'
+            ), 0),
+            hp.TrangThai = CASE 
+                WHEN hp.DaDong >= ISNULL((
+                    SELECT SUM(m.SoTinChi) * @DonGiaTinChi
+                    FROM DangKy dk2
+                    INNER JOIN LopHocPhan lhp2 ON dk2.MaLHP = lhp2.MaLHP
+                    INNER JOIN MonHoc m ON lhp2.MaMon = m.MaMon
+                    WHERE dk2.MaSV = hp.MaSV 
+                      AND lhp2.MaHocKy = hp.MaHocKy
+                      AND dk2.TrangThai = N'Đã đăng ký'
+                ), 0) THEN N'Đã đóng'
+                WHEN hp.DaDong > 0 THEN N'Đóng một phần'
+                ELSE N'Chưa đóng'
+            END
+        FROM HocPhi hp
+        INNER JOIN deleted d ON hp.MaSV = d.MaSV
+        INNER JOIN LopHocPhan lhp ON d.MaLHP = lhp.MaLHP
+        WHERE hp.MaHocKy = lhp.MaHocKy
+          AND d.TrangThai = N'Đã đăng ký'
+          AND EXISTS (
+              SELECT 1 
+              FROM inserted i 
+              WHERE i.MaDK = d.MaDK 
+                AND i.TrangThai = N'Đã hủy'
+          );
+    END
+END
+GO
+
+PRINT N'Đã tạo trigger trg_GiamHocPhiKhiHuy';
+GO
+-- vw_ThongKeSVTheoLop và vw_DiemTrungBinhSinhVien đã được tạo bên trên
+-- (dùng CREATE OR ALTER VIEW), không cần khai báo lại
+------
+------
+USE QuanLySinhVien;
+GO
+
+USE QuanLySinhVien;
 GO
 
 -- =====================================================
@@ -4116,44 +4330,160 @@ INSERT INTO LopHocPhan (MaLHP, MaLopHienThi, MaMon, MaGV, MaHocKy, MaPhong, SiSo
     ('LHP_TOAN_01',  N'TOAN-01',  'TOAN',   'GV003', 'HK2_2425', 'P202', 60, 6, 7, 9);
 GO
 
--- =====================================================
--- BỔ SUNG: CÁC STORED PROCEDURE CÒN THIẾU
--- =====================================================
 
--- =====================================================
--- SV03: sp_CapNhatTinhTrangSinhVien
--- Mục đích: Soft-delete – chỉ đổi TinhTrang, không xóa vật lý
--- ResultCode: 1=OK, -1=không tìm thấy SV, -2=giá trị TinhTrang không hợp lệ
--- =====================================================
+--=================================--
+--Cac cap nhat bo sung cho he thong 
+-- ============================================================
+-- I.3  CHECK CONSTRAINTS cho bảng Diem (0–10)
+-- ============================================================
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE name = 'CK_Diem_DiemChuyenCan'
+                 AND parent_object_id = OBJECT_ID('Diem'))
+    ALTER TABLE Diem ADD CONSTRAINT CK_Diem_DiemChuyenCan
+        CHECK (DiemChuyenCan IS NULL OR (DiemChuyenCan >= 0 AND DiemChuyenCan <= 10));
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE name = 'CK_Diem_DiemGiuaKy'
+                 AND parent_object_id = OBJECT_ID('Diem'))
+    ALTER TABLE Diem ADD CONSTRAINT CK_Diem_DiemGiuaKy
+        CHECK (DiemGiuaKy IS NULL OR (DiemGiuaKy >= 0 AND DiemGiuaKy <= 10));
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE name = 'CK_Diem_DiemCuoiKy'
+                 AND parent_object_id = OBJECT_ID('Diem'))
+    ALTER TABLE Diem ADD CONSTRAINT CK_Diem_DiemCuoiKy
+        CHECK (DiemCuoiKy IS NULL OR (DiemCuoiKy >= 0 AND DiemCuoiKy <= 10));
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE name = 'CK_Diem_DiemTongKet'
+                 AND parent_object_id = OBJECT_ID('Diem'))
+    ALTER TABLE Diem ADD CONSTRAINT CK_Diem_DiemTongKet
+        CHECK (DiemTongKet IS NULL OR (DiemTongKet >= 0 AND DiemTongKet <= 10));
 GO
-CREATE OR ALTER PROCEDURE sp_CapNhatTinhTrangSinhVien
-    @MaSV        VARCHAR(10),
-    @TinhTrangMoi NVARCHAR(20),
-    @ResultCode  INT OUTPUT
+
+-- ============================================================
+-- I.7  Đổi tên sp_ChuyenLop (thiếu log) → sp_ChuyenLop_Cu
+--       Dùng sp_ChuyenLop_CoLog (đã có) thay thế
+-- ============================================================
+IF OBJECT_ID('sp_ChuyenLop_Cu', 'P') IS NULL
+   AND OBJECT_ID('sp_ChuyenLop',    'P') IS NOT NULL
+    EXEC sp_rename 'sp_ChuyenLop', 'sp_ChuyenLop_Cu';
+GO
+
+-- ============================================================
+-- I.2  fn_KiemTraTienQuyet
+--       Trả về 1 nếu SV có thể đăng ký (đã đạt TQ hoặc không có TQ)
+--       Trả về 0 nếu chưa đạt môn tiên quyết
+-- ============================================================
+CREATE OR ALTER FUNCTION fn_KiemTraTienQuyet (
+    @MaSV  VARCHAR(10),
+    @MaMon VARCHAR(10)
+)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @MonTienQuyet VARCHAR(10);
+    SELECT @MonTienQuyet = MonTienQuyet FROM MonHoc WHERE MaMon = @MaMon;
+
+    IF @MonTienQuyet IS NULL RETURN 1;   -- không có TQ → cho phép
+
+    IF EXISTS (
+        SELECT 1
+        FROM DangKy     dk
+        JOIN LopHocPhan lhp ON dk.MaLHP = lhp.MaLHP
+        JOIN Diem       d   ON dk.MaDK  = d.MaDK
+        WHERE dk.MaSV        = @MaSV
+          AND lhp.MaMon       = @MonTienQuyet
+          AND d.DiemTongKet   >= 5
+          AND d.TrangThaiDiem = N'Đã khóa'
+          AND dk.TrangThai    = N'Đã đăng ký'
+    ) RETURN 1;
+
+    RETURN 0;
+END;
+GO
+
+-- ============================================================
+-- I.1  sp_XoaSinhVien – xóa mềm (đổi TinhTrang, khóa tài khoản)
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_XoaSinhVien
+    @MaSV       VARCHAR(10),
+    @ResultCode INT OUTPUT
+    --  1 = thành công
+    -- -1 = không tìm thấy sinh viên
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Kiểm tra sinh viên tồn tại
     IF NOT EXISTS (SELECT 1 FROM SinhVien WHERE MaSV = @MaSV)
-    BEGIN
-        SET @ResultCode = -1;
-        RETURN;
-    END
-
-    -- Kiểm tra giá trị TinhTrang hợp lệ
-    IF @TinhTrangMoi NOT IN (N'Đang học', N'Nghỉ học', N'Thôi học', N'Tốt nghiệp')
-    BEGIN
-        SET @ResultCode = -2;
-        RETURN;
-    END
+    BEGIN SET @ResultCode = -1; RETURN; END
 
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        UPDATE SinhVien
-        SET TinhTrang = @TinhTrangMoi
-        WHERE MaSV = @MaSV;
+        UPDATE SinhVien SET TinhTrang = N'Thôi học' WHERE MaSV = @MaSV;
+        UPDATE Users   SET Status    = 0            WHERE MaNguoiDung = @MaSV;
+
+        COMMIT TRANSACTION;
+        SET @ResultCode = 1;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        DECLARE @Err NVARCHAR(500) = ERROR_MESSAGE();
+        RAISERROR(@Err, 16, 1);
+    END CATCH
+END;
+GO
+
+-- ============================================================
+-- I.6  sp_ThemSinhVien – tự động tạo tài khoản Users (RoleID=4)
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_ThemSinhVien
+    @MaSV        VARCHAR(10),
+    @HoTen       NVARCHAR(100),
+    @NgaySinh    DATE          = NULL,
+    @GioiTinh    BIT           = NULL,
+    @DiaChi      NVARCHAR(200) = NULL,
+    @MaLopSH     VARCHAR(15),
+    @AnhDaiDien  NVARCHAR(255) = NULL,
+    @ResultCode  INT OUTPUT
+    --  1 = thành công
+    -- -1 = MaSV đã tồn tại
+    -- -2 = dữ liệu rỗng / không hợp lệ
+    -- -3 = MaLopSH không tồn tại
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF LEN(LTRIM(RTRIM(@MaSV)))    = 0
+    OR LEN(LTRIM(RTRIM(@HoTen)))   = 0
+    OR LEN(LTRIM(RTRIM(@MaLopSH))) = 0
+    BEGIN SET @ResultCode = -2; RETURN; END
+
+    SET @MaSV    = UPPER(LTRIM(RTRIM(@MaSV)));
+    SET @HoTen   = LTRIM(RTRIM(@HoTen));
+    SET @MaLopSH = LTRIM(RTRIM(@MaLopSH));
+
+    IF EXISTS (SELECT 1 FROM SinhVien WHERE MaSV = @MaSV)
+    BEGIN SET @ResultCode = -1; RETURN; END
+
+    IF NOT EXISTS (SELECT 1 FROM LopSinhHoat WHERE MaLopSH = @MaLopSH)
+    BEGIN SET @ResultCode = -3; RETURN; END
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        INSERT INTO SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, DiaChi, MaLopSH, AnhDaiDien)
+        VALUES (@MaSV, @HoTen, @NgaySinh, @GioiTinh, @DiaChi, @MaLopSH, @AnhDaiDien);
+
+        -- Tạo tài khoản mặc định: username=MaSV, pass=hash(MaSV), role=SinhVien
+        IF NOT EXISTS (SELECT 1 FROM Users WHERE Username = @MaSV)
+        BEGIN
+            DECLARE @PwdHash VARCHAR(255);
+            SET @PwdHash = LOWER(CONVERT(VARCHAR(255), HASHBYTES('SHA2_256', @MaSV), 2));
+            INSERT INTO Users (Username, PasswordHash, RoleID, MaNguoiDung, Status)
+            VALUES (@MaSV, @PwdHash, 4, @MaSV, 1);
+        END
 
         COMMIT TRANSACTION;
         SET @ResultCode = 1;
@@ -4166,143 +4496,224 @@ BEGIN
 END;
 GO
 
--- =====================================================
--- SV06: sp_LayChiTietSinhVien
--- Mục đích: Trả về 2 result set:
---   1. Hồ sơ đầy đủ sinh viên (join LopSinhHoat, Nganh, Khoa, KhoaHoc, GiangVien)
---   2. Lịch sử chuyển lớp (LichSuChuyenLop) DESC
--- =====================================================
-GO
-CREATE OR ALTER PROCEDURE sp_LayChiTietSinhVien
-    @MaSV VARCHAR(10)
+-- ============================================================
+-- I.2  sp_DangKyHocPhan – bổ sung kiểm tra môn tiên quyết
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_DangKyHocPhan
+    @maSV  VARCHAR(10),
+    @maLHP VARCHAR(20)
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    -- Result set 1: Thông tin cá nhân + lớp + khoa + ngành + khóa + GVCN
-    SELECT
-        sv.MaSV,
-        sv.HoTen,
-        sv.NgaySinh,
-        CASE sv.GioiTinh
-            WHEN 1 THEN N'Nam'
-            WHEN 0 THEN N'Nữ'
-            ELSE N'Chưa cập nhật'
-        END AS GioiTinhHienThi,
-        sv.GioiTinh,
-        sv.DiaChi,
-        sv.AnhDaiDien,
-        sv.TinhTrang,
-        sv.MaLopSH,
-        lsh.TenLop,
-        ng.MaNganh,
-        ng.TenNganh,
-        k.MaKhoa,
-        k.TenKhoa,
-        kh.MaKhoaHoc,
-        kh.TenKhoaHoc,
-        lsh.MaGVCN,
-        ISNULL(gv.HoTen, N'Chưa có') AS TenGVCN,
-        gv.Email       AS EmailGVCN,
-        gv.SoDienThoai AS SdtGVCN
-    FROM SinhVien sv
-    JOIN LopSinhHoat lsh ON sv.MaLopSH    = lsh.MaLopSH
-    JOIN Nganh       ng  ON lsh.MaNganh   = ng.MaNganh
-    JOIN Khoa        k   ON ng.MaKhoa     = k.MaKhoa
-    JOIN KhoaHoc     kh  ON lsh.MaKhoaHoc = kh.MaKhoaHoc
-    LEFT JOIN GiangVien gv ON lsh.MaGVCN  = gv.MaGV
-    WHERE sv.MaSV = @MaSV;
-
-    -- Result set 2: Lịch sử chuyển lớp
-    SELECT
-        ls.MaLS,
-        ls.LopCu,
-        ls.LopMoi,
-        ls.LyDo,
-        ls.NguoiDuyet,
-        ls.NgayChyen
-    FROM LichSuChuyenLop ls
-    WHERE ls.MaSV = @MaSV
-    ORDER BY ls.NgayChyen DESC;
-END;
-GO
-
--- =====================================================
--- SV07: sp_ChuyenLop_CoLog
--- Mục đích: Chuyển lớp sinh viên + ghi đầy đủ LyDo, NguoiDuyet vào LichSuChuyenLop
--- Đặt tên mới để không xung đột với sp_ChuyenLop hiện có
--- ResultCode: 1=OK, -1=SV không tồn tại hoặc không đang học, -2=lớp mới không tồn tại
--- =====================================================
-GO
-CREATE OR ALTER PROCEDURE sp_ChuyenLop_CoLog
-    @MaSV        VARCHAR(10),
-    @MaLopMoi    VARCHAR(15),
-    @LyDo        NVARCHAR(200) = NULL,
-    @NguoiDuyet  NVARCHAR(100) = NULL,
-    @ResultCode  INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- Kiểm tra sinh viên tồn tại và đang học
-    IF NOT EXISTS (
-        SELECT 1 FROM SinhVien
-        WHERE MaSV = @MaSV
-          AND TinhTrang = N'Đang học'
-    )
-    BEGIN
-        SET @ResultCode = -1;
-        RETURN;
-    END
-
-    -- Kiểm tra lớp mới tồn tại
-    IF NOT EXISTS (SELECT 1 FROM LopSinhHoat WHERE MaLopSH = @MaLopMoi)
-    BEGIN
-        SET @ResultCode = -2;
-        RETURN;
-    END
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
     BEGIN TRY
-        BEGIN TRANSACTION;
+        BEGIN TRAN;
 
-        -- Lấy lớp hiện tại
-        DECLARE @LopCu VARCHAR(15);
-        SELECT @LopCu = MaLopSH FROM SinhVien WHERE MaSV = @MaSV;
+        IF dbo.fn_KiemTraTrungLich(@maSV, @maLHP) = 1
+            RAISERROR(N'Bạn bị trùng lịch học với một môn khác đã đăng ký!', 16, 1);
 
-        -- Cập nhật lớp cho sinh viên
-        UPDATE SinhVien
-        SET MaLopSH = @MaLopMoi
-        WHERE MaSV = @MaSV;
+        DECLARE @maHocKy    VARCHAR(10),
+                @maMon      VARCHAR(10),
+                @soTinToiDa INT,
+                @soTinLHP   INT;
 
-        -- Ghi lịch sử chuyển lớp đầy đủ
-        INSERT INTO LichSuChuyenLop (MaSV, LopCu, LopMoi, LyDo, NguoiDuyet, NgayChyen)
-        VALUES (@MaSV, @LopCu, @MaLopMoi, @LyDo, @NguoiDuyet, GETDATE());
+        SELECT @maHocKy = MaHocKy, @maMon = MaMon
+        FROM   LopHocPhan WHERE MaLHP = @maLHP;
 
-        COMMIT TRANSACTION;
-        SET @ResultCode = 1;
+        SELECT @soTinToiDa = SoTinToiDa FROM HocKy WHERE MaHocKy = @maHocKy;
+
+        SELECT @soTinLHP = m.SoTinChi
+        FROM   MonHoc m JOIN LopHocPhan lhp ON m.MaMon = lhp.MaMon
+        WHERE  lhp.MaLHP = @maLHP;
+
+        IF (dbo.fn_TongTinChiDangKy(@maSV, @maHocKy) + @soTinLHP) > @soTinToiDa
+            RAISERROR(N'Vượt quá số tín chỉ tối đa được phép trong học kỳ!', 16, 1);
+
+        -- Kiểm tra môn tiên quyết
+        IF dbo.fn_KiemTraTienQuyet(@maSV, @maMon) = 0
+        BEGIN
+            DECLARE @tenMonTQ NVARCHAR(100);
+            SELECT @tenMonTQ = m2.TenMon
+            FROM   MonHoc m1 JOIN MonHoc m2 ON m1.MonTienQuyet = m2.MaMon
+            WHERE  m1.MaMon = @maMon;
+
+            DECLARE @msgTQ NVARCHAR(500) =
+                N'Bạn chưa hoàn thành môn tiên quyết "' + ISNULL(@tenMonTQ, N'') +
+                N'" để đăng ký học phần này!';
+            RAISERROR(@msgTQ, 16, 1);
+        END
+
+        INSERT INTO DangKy (MaSV, MaLHP, TrangThai)
+        VALUES (@maSV, @maLHP, N'Đã đăng ký');
+
+        COMMIT TRAN;
     END TRY
     BEGIN CATCH
-        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
-        DECLARE @Err2 NVARCHAR(500) = ERROR_MESSAGE();
-        RAISERROR(@Err2, 16, 1);
+        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@ErrMsg, 16, 1);
     END CATCH
 END;
 GO
 
--- =====================================================
--- BC04: sp_LayDiemSinhVien
--- Mục đích: Bảng điểm cá nhân của 1 sinh viên (dùng để in)
--- @MaHocKy = NULL → trả tất cả học kỳ; khác NULL → lọc theo học kỳ
--- Sắp xếp theo NamHoc, MaHocKy
--- =====================================================
+-- ============================================================
+-- I.4  sp_LayDanhSachDangKy – bổ sung tham số @MaSV
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhSachDangKy
+    @Keyword NVARCHAR(100) = NULL,
+    @MaSV    VARCHAR(10)   = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        dk.MaDK,
+        dk.MaSV,
+        sv.HoTen      AS TenSinhVien,
+        dk.MaLHP,
+        lhp.MaLopHienThi,
+        mh.TenMon,
+        mh.SoTinChi,
+        hk.TenHocKy,
+        hk.NamHoc,
+        lhp.Thu,
+        lhp.TietBatDau,
+        lhp.TietKetThuc,
+        dk.NgayDangKy,
+        dk.TrangThai
+    FROM DangKy dk
+    JOIN SinhVien   sv  ON dk.MaSV     = sv.MaSV
+    JOIN LopHocPhan lhp ON dk.MaLHP    = lhp.MaLHP
+    JOIN MonHoc     mh  ON lhp.MaMon   = mh.MaMon
+    JOIN HocKy      hk  ON lhp.MaHocKy = hk.MaHocKy
+    WHERE (@MaSV    IS NULL OR dk.MaSV = @MaSV)
+      AND (@Keyword IS NULL
+           OR dk.MaSV   LIKE N'%' + @Keyword + N'%'
+           OR sv.HoTen  LIKE N'%' + @Keyword + N'%'
+           OR dk.MaLHP  LIKE N'%' + @Keyword + N'%'
+           OR mh.TenMon LIKE N'%' + @Keyword + N'%')
+    ORDER BY dk.NgayDangKy DESC;
+END
 GO
-CREATE OR ALTER PROCEDURE sp_LayDiemSinhVien
+
+-- ============================================================
+-- I.4  sp_BaoCaoHocPhi – bổ sung tham số @MaSV
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_BaoCaoHocPhi
+    @MaHocKy VARCHAR(10),
+    @MaSV    VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        sv.MaSV,
+        sv.HoTen,
+        l.TenLop,
+        n.TenNganh,
+        k.TenKhoa,
+        hp.SoTinChiDangKy,
+        hp.TongHocPhi,
+        hp.DaDong,
+        (hp.TongHocPhi - hp.DaDong)                                AS ConLai,
+        hp.TrangThai,
+        CASE
+            WHEN hp.DaDong >= hp.TongHocPhi THEN N'Hoàn thành'
+            WHEN hp.DaDong > 0              THEN N'Còn nợ'
+            ELSE N'Chưa đóng'
+        END AS TinhTrangThanhToan,
+        hp.NgayDong
+    FROM HocPhi hp
+    JOIN SinhVien    sv ON hp.MaSV     = sv.MaSV
+    JOIN LopSinhHoat l  ON sv.MaLopSH  = l.MaLopSH
+    JOIN Nganh       n  ON l.MaNganh   = n.MaNganh
+    JOIN Khoa        k  ON n.MaKhoa    = k.MaKhoa
+    WHERE hp.MaHocKy = @MaHocKy
+      AND (@MaSV IS NULL OR hp.MaSV = @MaSV)
+    ORDER BY k.TenKhoa, n.TenNganh, sv.HoTen;
+
+    -- Tổng hợp chỉ khi xem toàn bộ (không lọc cá nhân)
+    IF @MaSV IS NULL
+        SELECT
+            COUNT(*)                                                             AS TongSinhVien,
+            SUM(hp.TongHocPhi)                                                   AS TongHocPhi,
+            SUM(hp.DaDong)                                                        AS TongDaThu,
+            SUM(hp.TongHocPhi - hp.DaDong)                                        AS TongConNo,
+            CAST(SUM(hp.DaDong)*100.0 / NULLIF(SUM(hp.TongHocPhi),0) AS DECIMAL(5,2)) AS TyLeThu
+        FROM HocPhi hp
+        WHERE hp.MaHocKy = @MaHocKy;
+END
+GO
+
+-- ============================================================
+-- I.5  sp_LayLopHocPhanTheoGiangVien
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_LayLopHocPhanTheoGiangVien
+    @MaGV VARCHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        lhp.MaLHP,
+        lhp.MaLopHienThi,
+        mh.TenMon,
+        mh.SoTinChi,
+        gv.HoTen     AS TenGV,
+        p.TenPhong,
+        p.ViTri,
+        hk.TenHocKy,
+        hk.NamHoc,
+        lhp.Thu,
+        lhp.TietBatDau,
+        lhp.TietKetThuc,
+        lhp.SiSoToiDa,
+        lhp.SiSoHienTai,
+        lhp.TrangThai,
+        lhp.MaMon,
+        lhp.MaGV,
+        lhp.MaHocKy,
+        lhp.MaPhong
+    FROM LopHocPhan lhp
+    JOIN MonHoc    mh ON lhp.MaMon   = mh.MaMon
+    JOIN GiangVien gv ON lhp.MaGV    = gv.MaGV
+    JOIN PhongHoc   p ON lhp.MaPhong = p.MaPhong
+    JOIN HocKy     hk ON lhp.MaHocKy = hk.MaHocKy
+    WHERE lhp.MaGV = @MaGV
+    ORDER BY hk.NamHoc DESC, lhp.MaLHP;
+END
+GO
+
+-- ============================================================
+-- I.5  sp_KiemTraQuyenSuaDiem
+--       1 = có quyền | -1 = lớp không tồn tại | -2 = không phụ trách lớp
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_KiemTraQuyenSuaDiem
+    @MaLHP      VARCHAR(20),
+    @MaGV       VARCHAR(10),
+    @ResultCode INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM LopHocPhan WHERE MaLHP = @MaLHP)
+    BEGIN SET @ResultCode = -1; RETURN; END
+
+    IF NOT EXISTS (SELECT 1 FROM LopHocPhan WHERE MaLHP = @MaLHP AND MaGV = @MaGV)
+    BEGIN SET @ResultCode = -2; RETURN; END
+
+    SET @ResultCode = 1;
+END
+GO
+
+-- ============================================================
+-- I.5  sp_LayDiemSinhVienCaNhan  (dùng cho SinhVien xem điểm cá nhân)
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_LayDiemSinhVienCaNhan
     @MaSV    VARCHAR(10),
     @MaHocKy VARCHAR(10) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-
     SELECT
         hk.MaHocKy,
         hk.TenHocKy,
@@ -4318,14 +4729,67 @@ BEGIN
         d.XepLoai,
         d.TrangThaiDiem,
         d.NgayXacNhan
-    FROM Diem        d
-    JOIN DangKy      dk  ON d.MaDK    = dk.MaDK
-    JOIN LopHocPhan  lhp ON dk.MaLHP  = lhp.MaLHP
-    JOIN MonHoc      mh  ON lhp.MaMon = mh.MaMon
-    JOIN HocKy       hk  ON lhp.MaHocKy = hk.MaHocKy
-    WHERE dk.MaSV = @MaSV
+    FROM Diem       d
+    JOIN DangKy     dk  ON d.MaDK      = dk.MaDK
+    JOIN LopHocPhan lhp ON dk.MaLHP    = lhp.MaLHP
+    JOIN MonHoc     mh  ON lhp.MaMon   = mh.MaMon
+    JOIN HocKy      hk  ON lhp.MaHocKy = hk.MaHocKy
+    WHERE dk.MaSV    = @MaSV
       AND (@MaHocKy IS NULL OR hk.MaHocKy = @MaHocKy)
       AND dk.TrangThai = N'Đã đăng ký'
     ORDER BY hk.NamHoc, hk.MaHocKy, mh.TenMon;
 END;
+GO
+
+-- ============================================================
+-- I.6  sp_BaoCaoHocPhiTheoMaSV  (dùng cho SinhVien xem học phí cá nhân)
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_BaoCaoHocPhiTheoMaSV
+    @MaSV    VARCHAR(10),
+    @MaHocKy VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        hk.TenHocKy,
+        hk.NamHoc,
+        hp.SoTinChiDangKy,
+        hp.TongHocPhi,
+        hp.DaDong,
+        (hp.TongHocPhi - hp.DaDong) AS ConLai,
+        hp.TrangThai,
+        hp.NgayDong
+    FROM HocPhi hp
+    JOIN HocKy hk ON hp.MaHocKy = hk.MaHocKy
+    WHERE hp.MaSV = @MaSV
+      AND (@MaHocKy IS NULL OR hp.MaHocKy = @MaHocKy)
+    ORDER BY hk.NamHoc DESC, hk.MaHocKy DESC;
+END;
+GO
+
+-- ============================================================
+-- PHẦN II – CHUẨN HÓA TÀI KHOẢN MẪU
+-- Đặt password = 'admin123' cho tất cả tài khoản mẫu
+-- (chạy 1 lần sau khi import dữ liệu)
+-- ============================================================
+DECLARE @hash VARCHAR(255) =
+    LOWER(CONVERT(VARCHAR(255), HASHBYTES('SHA2_256', 'admin123'), 2));
+
+-- Cập nhật password cho các tài khoản mẫu chưa đúng
+UPDATE Users
+SET PasswordHash = @hash
+WHERE Username IN ('admin', 'phongdt', 'gv001', 'sv001');
+
+-- Đảm bảo tất cả tài khoản mẫu đang active
+UPDATE Users
+SET Status = 1
+WHERE Username IN ('admin', 'phongdt', 'gv001', 'sv001');
+GO
+
+-- Kiểm tra kết quả:
+-- SELECT UserID, Username, RoleID,
+--        (SELECT RoleName FROM Roles WHERE Roles.RoleID = Users.RoleID) AS RoleName,
+--        MaNguoiDung, Status
+-- FROM Users
+-- WHERE Username IN ('admin','phongdt','gv001','sv001');
 GO

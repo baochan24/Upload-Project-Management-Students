@@ -11,6 +11,14 @@ namespace QuanLySinhVien.BUS
             return DangKyDAL.LoadAll(keyword);
         }
 
+        /// <summary>Lấy lịch học / danh sách đăng ký của một sinh viên.</summary>
+        public static DataTable LoadBySinhVien(string maSV)
+        {
+            if (string.IsNullOrWhiteSpace(maSV))
+                return new DataTable();
+            return DangKyDAL.LoadBySinhVien(maSV.Trim().ToUpperInvariant());
+        }
+
         public static OperationResult Register(string maSV, string maLHP)
         {
             if (string.IsNullOrWhiteSpace(maSV) || string.IsNullOrWhiteSpace(maLHP))

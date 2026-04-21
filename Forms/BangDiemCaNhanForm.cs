@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Printing;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
@@ -12,9 +13,11 @@ namespace QuanLySinhVien.Forms
 {
     public class BangDiemCaNhanForm : Form
     {
-        private readonly TextBox      txtMaSV;
-        private readonly ComboBox     cmbHocKy;
-        private readonly DataGridView dgv;
+        private readonly TextBox        txtMaSV;
+        private readonly ComboBox       cmbHocKy;
+        private readonly DataGridView   dgv;
+        private readonly PrintDocument  _printDoc = new PrintDocument();
+        private int                     _printPageIndex;
 
         public BangDiemCaNhanForm()
         {
@@ -54,7 +57,10 @@ namespace QuanLySinhVien.Forms
             var btnExport = new Button { Text = "Xuất CSV", Top = 24, Left = 545, Width = 90 };
             btnExport.Click += BtnExport_Click;
 
-            panel.Controls.AddRange(new Control[] { btnLoad, btnExport });
+            var btnPrint = new Button { Text = "In bảng điểm", Top = 24, Left = 645, Width = 110 };
+            btnPrint.Click += BtnPrint_Click;
+
+            panel.Controls.AddRange(new Control[] { btnLoad, btnExport, btnPrint });
 
             // ── DataGridView ──────────────────────────────────────────────
             dgv = new DataGridView
@@ -70,6 +76,7 @@ namespace QuanLySinhVien.Forms
             Controls.Add(panel);
             Controls.Add(dgv);
 
+            _printDoc.PrintPage += PrintDoc_PrintPage;
             Load += BangDiemCaNhanForm_Load;
         }
 
@@ -126,6 +133,79 @@ namespace QuanLySinhVien.Forms
             {
                 MessageBox.Show(ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void BtnPrint_Click(object sender, EventArgs e)
+        {
+            if (dgv.Rows.Count == 0)
+            {
+                MessageBox.Show("Không có dữ liệu để in.", "Thông báo",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var preview = new PrintPreviewDialog { Document = _printDoc, Width = 900, Height = 700 })
+            {
+                _printPageIndex = 0;
+                preview.ShowDialog();
+            }
+        }
+
+        private void PrintDoc_PrintPage(object sender, PrintPageEventArgs e)
+        {
+            var g      = e.Graphics;
+            var margin = e.MarginBounds;
+            var fontTitle = new Font("Arial", 13, FontStyle.Bold);
+            var fontHead  = new Font("Arial", 9,  FontStyle.Bold);
+            var fontCell  = new Font("Arial", 9,  FontStyle.Regular);
+            var brush     = Brushes.Black;
+
+            float y = margin.Top;
+
+            // Tiêu đề
+            string title = $"BẢNG ĐIỂM CÁ NHÂN - Sinh viên: {txtMaSV.Text.Trim().ToUpperInvariant()}";
+            g.DrawString(title, fontTitle, brush, margin.Left, y);
+            y += fontTitle.GetHeight(g) + 6;
+
+            // Tính độ rộng cột đều nhau
+            int colCount  = dgv.Columns.Count;
+            float colWidth = (float)margin.Width / colCount;
+            float rowH    = fontHead.GetHeight(g) + 4;
+
+            // Header
+            for (int c = 0; c < colCount; c++)
+            {
+                var rect = new RectangleF(margin.Left + c * colWidth, y, colWidth, rowH);
+                g.FillRectangle(Brushes.LightSteelBlue, rect);
+                g.DrawRectangle(Pens.Gray, rect.X, rect.Y, rect.Width, rect.Height);
+                g.DrawString(dgv.Columns[c].HeaderText, fontHead, brush, rect.X + 2, rect.Y + 2);
+            }
+            y += rowH;
+
+            // Rows
+            while (_printPageIndex < dgv.Rows.Count)
+            {
+                var row = dgv.Rows[_printPageIndex];
+                rowH = fontCell.GetHeight(g) + 4;
+
+                if (y + rowH > margin.Bottom)
+                {
+                    e.HasMorePages = true;
+                    return;
+                }
+
+                for (int c = 0; c < colCount; c++)
+                {
+                    var rect = new RectangleF(margin.Left + c * colWidth, y, colWidth, rowH);
+                    g.DrawRectangle(Pens.LightGray, rect.X, rect.Y, rect.Width, rect.Height);
+                    g.DrawString(row.Cells[c].Value?.ToString() ?? "", fontCell, brush, rect.X + 2, rect.Y + 2);
+                }
+
+                y += rowH;
+                _printPageIndex++;
+            }
+
+            e.HasMorePages = false;
         }
 
         private void BtnExport_Click(object sender, EventArgs e)

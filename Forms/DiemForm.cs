@@ -98,7 +98,12 @@ namespace QuanLySinhVien.Forms
 
         private void LoadLopLookup()
         {
-            var dt = CommonDAL.LoadLookup("sp_LayDanhSachLopHocPhan");
+            DataTable dt;
+            if (UserSession.IsGiangVien && !string.IsNullOrWhiteSpace(UserSession.MaGV))
+                dt = LopHocPhanBUS.LoadByGiangVien(UserSession.MaGV);
+            else
+                dt = CommonDAL.LoadLookup("sp_LayDanhSachLopHocPhan");
+
             cmbMaLHP.DataSource    = dt;
             cmbMaLHP.DisplayMember = "MaLopHienThi";
             cmbMaLHP.ValueMember   = "MaLHP";
@@ -153,6 +158,19 @@ namespace QuanLySinhVien.Forms
         {
             if (!int.TryParse(txtMaDK.Text, out var maDK) || maDK <= 0)
             { MessageBox.Show("Chọn sinh viên từ danh sách trước.", "Thiếu thông tin", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+
+            // Giảng viên chỉ được nhập điểm cho lớp của mình
+            if (UserSession.IsGiangVien)
+            {
+                var maLHP = cmbMaLHP.SelectedValue?.ToString();
+                int qr = DiemBUS.KiemTraQuyenSuaDiem(maLHP, UserSession.MaGV);
+                if (qr != 1)
+                {
+                    string msg = qr == -1 ? "Lớp học phần không tồn tại." : "Bạn không có quyền nhập điểm cho lớp này.";
+                    MessageBox.Show(msg, "Không có quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
 
             float? cc = (float)nudDiemCC.Value;
             float? gk = (float)nudDiemGK.Value;

@@ -36,5 +36,25 @@ namespace QuanLySinhVien.BUS
 
             return DiemDAL.LockClassScores(maLHP.Trim().ToUpperInvariant(), UserSession.Username ?? "System");
         }
+
+        /// <summary>
+        /// Kiểm tra giảng viên có quyền nhập/sửa điểm cho lớp học phần không.
+        /// Kết quả: 1 = được phép, -1 = lớp không tồn tại, -2 = không phải GV của lớp.
+        /// </summary>
+        public static int KiemTraQuyenSuaDiem(string maLHP, string maGV)
+        {
+            if (string.IsNullOrWhiteSpace(maLHP) || string.IsNullOrWhiteSpace(maGV))
+                return -2;
+            return DiemDAL.KiemTraQuyenSuaDiem(maLHP.Trim().ToUpperInvariant(), maGV.Trim().ToUpperInvariant());
+        }
+
+        /// <summary>Lấy bảng điểm cá nhân của sinh viên đang đăng nhập.</summary>
+        public static System.Data.DataTable LayDiemCaNhan(string maSV, string maHocKy = null)
+        {
+            if (string.IsNullOrWhiteSpace(maSV))
+                return new System.Data.DataTable();
+            return DiemDAL.LayDiemCaNhan(maSV.Trim().ToUpperInvariant(),
+                                         string.IsNullOrWhiteSpace(maHocKy) ? null : maHocKy.Trim().ToUpperInvariant());
+        }
     }
 }

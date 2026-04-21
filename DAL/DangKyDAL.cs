@@ -13,6 +13,14 @@ namespace QuanLySinhVien.DAL
             return DatabaseHelper.ExecuteDataTable("sp_LayDanhSachDangKy", parameter);
         }
 
+        /// <summary>Lấy danh sách đăng ký (lịch học) của một sinh viên cụ thể.</summary>
+        public static DataTable LoadBySinhVien(string maSV)
+        {
+            return DatabaseHelper.ExecuteDataTable("sp_LayDanhSachDangKy",
+                new SqlParameter("@Keyword", SqlDbType.NVarChar, 100) { Value = DBNull.Value },
+                new SqlParameter("@MaSV",    SqlDbType.VarChar,  10)  { Value = maSV });
+        }
+
         public static OperationResult Register(string maSV, string maLHP)
         {
             try

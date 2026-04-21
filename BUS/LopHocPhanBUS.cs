@@ -11,6 +11,14 @@ namespace QuanLySinhVien.BUS
             return LopHocPhanDAL.LoadAll(keyword);
         }
 
+        /// <summary>Lấy danh sách lớp học phần của một giảng viên.</summary>
+        public static DataTable LoadByGiangVien(string maGV)
+        {
+            if (string.IsNullOrWhiteSpace(maGV))
+                return new DataTable();
+            return LopHocPhanDAL.LoadByGiangVien(maGV.Trim().ToUpperInvariant());
+        }
+
         public static OperationResult Add(string maLHP, string maLopHienThi, string maMon, string maGV, string maHocKy, string maPhong, int siSoToiDa, byte? thu, byte? tietBatDau, byte? tietKetThuc)
         {
             if (string.IsNullOrWhiteSpace(maLHP) || string.IsNullOrWhiteSpace(maLopHienThi) || string.IsNullOrWhiteSpace(maMon) || string.IsNullOrWhiteSpace(maGV) || string.IsNullOrWhiteSpace(maHocKy) || string.IsNullOrWhiteSpace(maPhong))

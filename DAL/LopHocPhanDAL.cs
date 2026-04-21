@@ -13,6 +13,13 @@ namespace QuanLySinhVien.DAL
             return DatabaseHelper.ExecuteDataTable("sp_LayDanhSachLopHocPhan", parameter);
         }
 
+        /// <summary>Lấy danh sách lớp học phần mà một giảng viên phụ trách.</summary>
+        public static DataTable LoadByGiangVien(string maGV)
+        {
+            return DatabaseHelper.ExecuteDataTable("sp_LayLopHocPhanTheoGiangVien",
+                new SqlParameter("@MaGV", SqlDbType.VarChar, 10) { Value = maGV });
+        }
+
         public static OperationResult Add(string maLHP, string maLopHienThi, string maMon, string maGV, string maHocKy, string maPhong, int siSoToiDa, byte? thu, byte? tietBatDau, byte? tietKetThuc)
         {
             var resultParameter = new SqlParameter("@ResultCode", SqlDbType.Int) { Direction = ParameterDirection.Output };

@@ -7,7 +7,8 @@
       "Bash(cmd:*)",
       "Bash(grep -n \"SHA_256\\\\|where @MaKhoaHoc = @\\\\|where @MaLopSH = @\\\\|TenLHP\\\\|ALTER FUNCTION\\\\|ALTER TRIGGER trg_Tinh\\\\|Dang hoc\\\\|GO$\" DataSetFinal.sql2)",
       "Bash(powershell:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(python3:*)"
     ]
   }
 }
