@@ -1,6 +1,8 @@
 using System;
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
+using Guna.UI2.WinForms;
 using QuanLySinhVien.BUS;
 using QuanLySinhVien.DAL;
 
@@ -8,7 +10,7 @@ namespace QuanLySinhVien.Forms
 {
     public class SinhVienForm : Form
     {
-        private readonly DataGridView dgvSinhVien;
+        private readonly Guna2DataGridView dgvSinhVien;
         private readonly TextBox txtMaSV;
         private readonly TextBox txtHoTen;
         private readonly DateTimePicker dtpNgaySinh;
@@ -23,13 +25,11 @@ namespace QuanLySinhVien.Forms
         public SinhVienForm()
         {
             Text = "Quản lý sinh viên";
-            Width = 980;
-            Height = 700;
+            // Không set Width/Height cứng – để Dock=Fill từ MainForm quyết định kích thước
 
-            dgvSinhVien = new DataGridView
+            dgvSinhVien = new Guna2DataGridView
             {
-                Dock = DockStyle.Bottom,
-                Height = 320,
+                Dock = DockStyle.Fill,   // Fill thay vì Bottom+Height cứng → tránh chồng lấn
                 ReadOnly = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect
@@ -106,16 +106,81 @@ namespace QuanLySinhVien.Forms
             btnChuyenLop.Click += BtnChuyenLop_Click;
 
             panel.Controls.AddRange(new Control[] { btnSearch, btnAdd, btnUpdate, btnDelete, btnRefresh, btnXemChiTiet, btnChuyenLop });
-            Controls.Add(panel);
-            Controls.Add(dgvSinhVien);
+            // WinForms reverse-order: dgv(Fill, index 0) → fill pass; panel(Top, index 1, LAST) → dock top trước
+            Controls.Add(dgvSinhVien);  // Fill – index 0 (fill pass)
+            Controls.Add(panel);        // Top  – index 1 (last → processed first → docks to top 300px)
 
             Load += SinhVienForm_Load;
+
+            // ── Áp style UI – không ảnh hưởng logic ──────────────────────
+            ApplyTheme(panel, dgvSinhVien, btnSearch, btnAdd, btnUpdate, btnDelete, btnRefresh);
         }
 
         private void SinhVienForm_Load(object sender, EventArgs e)
         {
             LoadLookups();
             LoadData();
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // UI THEME – không chứa logic nghiệp vụ
+        // ══════════════════════════════════════════════════════════════════
+
+        private void ApplyTheme(Panel inputPanel, DataGridView dgv,
+                                Button btnSearch, Button btnAdd, Button btnUpdate,
+                                Button btnDelete, Button btnRefresh)
+        {
+            // Form
+            BackColor = ThemeConfig.BgMain;
+            Font      = ThemeConfig.FontDefault;
+
+            // Panel nhập liệu
+            inputPanel.BackColor = Color.White;
+
+            // Tiêu đề form
+            var lblTitle = new Label
+            {
+                Text      = "QUẢN LÝ SINH VIÊN",
+                Font      = ThemeConfig.FontBold,
+                ForeColor = ThemeConfig.PrimaryMid,
+                AutoSize  = true,
+                Left      = 10,
+                Top       = -2
+            };
+            // Đường kẻ phân cách dưới tiêu đề
+            var separator = new Panel
+            {
+                Left      = 10,
+                Top       = 18,
+                Width     = inputPanel.Width - 20,
+                Height    = 2,
+                BackColor = ThemeConfig.PrimaryLight
+            };
+            inputPanel.Controls.Add(lblTitle);
+            inputPanel.Controls.Add(separator);
+
+            // DataGridView
+            UIHelper.StyleDataGridView(dgv);
+
+            // Nút chức năng chính
+            UIHelper.StyleButton(btnSearch, ThemeConfig.BtnSearch, ThemeConfig.BtnSearchHover);
+            UIHelper.StyleButton(btnAdd,    ThemeConfig.BtnAdd,    ThemeConfig.BtnAddHover);
+            UIHelper.StyleButton(btnUpdate, ThemeConfig.BtnEdit,   ThemeConfig.BtnEditHover);
+            UIHelper.StyleButton(btnDelete, ThemeConfig.BtnDelete, ThemeConfig.BtnDeleteHover);
+            UIHelper.StyleButton(btnRefresh,ThemeConfig.BtnNeutral,ThemeConfig.BtnNeutralHover);
+
+            // Nút đặc biệt (field)
+            UIHelper.StyleButton(btnXemChiTiet, ThemeConfig.BtnSearch,  ThemeConfig.BtnSearchHover,
+                                 size: new Size(120, 30));
+            UIHelper.StyleButton(btnChuyenLop,  ThemeConfig.BtnEdit,    ThemeConfig.BtnEditHover,
+                                 size: new Size(120, 30));
+
+            // Style các TextBox và Label trong inputPanel
+            foreach (Control c in inputPanel.Controls)
+            {
+                if (c is TextBox tb)  UIHelper.StyleTextBox(tb);
+                if (c is Label  lbl) UIHelper.StyleLabel(lbl);
+            }
         }
 
         private TextBox CreateLabeledTextBox(Control parent, string labelText, int top)

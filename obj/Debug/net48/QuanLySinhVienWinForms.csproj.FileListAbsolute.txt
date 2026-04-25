@@ -10,3 +10,5 @@ D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.AssemblyInfoInputs.cach
 D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.AssemblyInfo.cs
 D:\doAnHQTCSDL\UI\bin\Debug\net48\App.config
 D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySinhVienWinForms.sourcelink.json
+D:\doAnHQTCSDL\UI\bin\Debug\net48\Guna.UI2.dll
+D:\doAnHQTCSDL\UI\obj\Debug\net48\QuanLySi.472A9C0B.Up2Date

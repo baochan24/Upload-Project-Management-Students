@@ -16,9 +16,24 @@ namespace QuanLySinhVien.DAL
         /// <summary>Lấy danh sách đăng ký (lịch học) của một sinh viên cụ thể.</summary>
         public static DataTable LoadBySinhVien(string maSV)
         {
-            return DatabaseHelper.ExecuteDataTable("sp_LayDanhSachDangKy",
-                new SqlParameter("@Keyword", SqlDbType.NVarChar, 100) { Value = DBNull.Value },
-                new SqlParameter("@MaSV",    SqlDbType.VarChar,  10)  { Value = maSV });
+            // Thử gọi SP phiên bản mới (có @MaSV – cần chạy DataSetFinal.sql phần "I.4")
+            try
+            {
+                return DatabaseHelper.ExecuteDataTable("sp_LayDanhSachDangKy",
+                    new SqlParameter("@Keyword", SqlDbType.NVarChar, 100) { Value = DBNull.Value },
+                    new SqlParameter("@MaSV",    SqlDbType.VarChar,  10)  { Value = maSV });
+            }
+            catch (SqlException ex) when (ex.Message.Contains("@MaSV"))
+            {
+                // Fallback: SP chưa được cập nhật → gọi không có @MaSV, filter trong bộ nhớ
+                var dt = DatabaseHelper.ExecuteDataTable("sp_LayDanhSachDangKy",
+                    new SqlParameter("@Keyword", SqlDbType.NVarChar, 100) { Value = DBNull.Value });
+                var result = dt.Clone();
+                foreach (DataRow row in dt.Rows)
+                    if (string.Equals(row["MaSV"]?.ToString(), maSV, StringComparison.OrdinalIgnoreCase))
+                        result.ImportRow(row);
+                return result;
+            }
         }
 
         public static OperationResult Register(string maSV, string maLHP)

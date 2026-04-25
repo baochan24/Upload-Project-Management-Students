@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "peRXQYULE7s=",
+  "dgSpecHash": "svse3q4UqjI=",
   "success": true,
   "projectFilePath": "d:\\doAnHQTCSDL\\UI\\QuanLySinhVienWinForms.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\ADMIN\\.nuget\\packages\\guna.ui2.winforms\\2.0.4.7\\guna.ui2.winforms.2.0.4.7.nupkg.sha512"
+  ],
   "logs": []
 }
